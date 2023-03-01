@@ -12,7 +12,7 @@ All sub-program objects must include these features:
 from datetime import datetime
 
 import commands
-from sub_apps import nodes
+import nodes
 
 Nodes = nodes.ReadWriteNodes()
 Coms = commands.coms
