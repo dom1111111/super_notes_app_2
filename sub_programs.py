@@ -21,9 +21,10 @@ Coms = commands.coms
 # Sub-Program Parent Class
 
 class PersistentCommand:
-    def __init__(self, name:str):
+    def __init__(self, name:str, priority:int):
         self.name_id = name + '-' + datetime.now().strftime(Coms.time_str_format_1)
-    
+        self.priority = priority
+
     def unpack_transcription(self, transcription):
         self.time = transcription.get('timestamp')
         self.audio_power = transcription.get('audio power')
@@ -35,7 +36,7 @@ class PersistentCommand:
 
 class VoiceController(PersistentCommand):
     def __init__(self, name):
-        super().__init__(name)
+        super().__init__(name, 2)
 
         # for voice input validation
         self.phrase_threshold = 0
@@ -122,7 +123,7 @@ class VoiceController(PersistentCommand):
 
 class CreateNoteQuick(PersistentCommand):
     def __init__(self, name):
-        super().__init__(name)
+        super().__init__(name, 4)
         self.text_lines = [] 
 
     def main(self, transcription:dict):

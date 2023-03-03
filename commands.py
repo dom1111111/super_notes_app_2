@@ -79,8 +79,9 @@ class AppCommands:
 
     def spawn_sub_program(self, program_object, name:str):
         self.nl_print(f'starting sub_program: "{name}"')
-        prog = program_object(name)
-        self.sub_progs.append(prog)
+        prog = program_object(name)                     # instatiate the object
+        self.sub_progs.append(prog)                     # add object to sub_progs list
+        self.sub_progs.sort(key=lambda x: x.priority)   # sort sub_progs list by object attribute: "priority"
 
     def terminate_sub_program(self, name_id:str):
         for prog in self.sub_progs:
