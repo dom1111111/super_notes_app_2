@@ -1,5 +1,7 @@
 from time import sleep
 from datetime import datetime
+#from external_scripts.vosk_trancriber import VoskT
+from external_scripts.whisper_transcriber import WhisperT
 
 import GUI_tk as GUI
 import stt_engine
@@ -11,7 +13,7 @@ class AppCommands:
     def __init__(self):
         self.loop = False
         self.sub_progs = []                     # should store active program objects
-        self.vox = stt_engine.VoiceController()
+        self.vox = stt_engine.VoiceToText(WhisperT)
         
         self.time_str_format_1 = '%Y%m%d%H%M%S%f'
         self.common_keywords = {                # even single word combos MUST be tuples - don't foget the comma
@@ -94,7 +96,7 @@ class AppCommands:
     #IO Funcs
 
     def get_voice_input(self):
-        return self.vox.get_valid_phrase()
+        return self.vox.get_transcribed_phrase()
 
     def nl_print(self, x:str=None):
         print('\n'+x)

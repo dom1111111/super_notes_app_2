@@ -1,6 +1,3 @@
-from time import sleep
-from datetime import datetime
-from queue import Queue, PriorityQueue
 from threading import Thread
 
 import commands
