@@ -46,7 +46,7 @@ class ReadWriteNodes:
                 time_valid = datetime.strptime(time, self.year_month_str_format)
             except:
                 time_valid = False
-            # if both conditions are met, append to node_files
+            # if both are True, append to node_files
             if is_json and time_valid:
                 filepath = path.join(STORAGE_DIR, file)
                 node_files.append(filepath)
@@ -54,8 +54,8 @@ class ReadWriteNodes:
 
     def __find_filepath_for_node(self, id:str):
         # isolate year and month in timestamp from id
-        node_time = id.split('_')[0]
-        node_time = datetime.strptime(node_time, self.time_str_format_1).strftime(self.year_month_str_format)
+        node_time = datetime.strptime(id, self.time_str_format_1).strftime(self.year_month_str_format)
+        # then match node_time to file_time
         for filepath in self.__get_all_node_file_paths():
             file_name = path.basename(filepath)
             file_time = file_name[0:6]
@@ -70,17 +70,23 @@ class ReadWriteNodes:
 
     #---
 
-    def create_node(self, time=datetime.now(), node_type:str='note', content:list=[]):
-        id = time.strftime(self.time_str_format_1) + '_' + node_type
-        node = {id: content}
+    def create_node(self, name:str, node_type:str='text', content:str=''):
+        # create node:
+        node_data = {       
+            'name': name,       # should be a longer descriptive name, almost like a short description (makes it easier to find)
+            'type': node_type,  # type of node - determines how content should be read
+            'supe': [],         # super links
+            'side': [],         # side links
+            'sub':  [],         # sub links
+            'cont': content     # the actual content of the node - can also be a file reference
+        }
+        id = datetime.now().strftime(self.time_str_format_1)    # creation time, also serves as id
+        node = {id: node_data}
+        # add node to storage file:
         filepath = self.current_nodes_filepath
         nodes = self.__read_file(filepath)
         nodes.update(node)
         self.__write_file(filepath, nodes)
-    
-    # def create_note(self):
-    # task
-    # command
     
     def get_node(self, id):
         node_and_data = self.__get_node_and_outside_data(id)
