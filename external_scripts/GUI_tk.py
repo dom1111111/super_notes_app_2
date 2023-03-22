@@ -104,6 +104,7 @@ def clear_mainview():
     main_view.config(state='disabled')
 
 def run_GUI():
+    """this must be called from the main thread, and will persist - will not return!"""
     window.mainloop()
 
 def stop_GUI():
