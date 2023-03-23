@@ -1,81 +1,12 @@
 from threading import Thread
 from datetime import datetime
 
-import system_tools as sys
-import programs_commands as prg
+import system_tools as ST
+import programs_commands as PC
 
 #-------------------------------
 
-
-
-
-class MainController():
-    def __init__(self):
-        self.loop = False
-        #self.awake = False             # keeps track of when system is active
-        self.sub_progs = []             # should store active sub-program objects
-        self.current_program_focus = None
-        self.base_program = None
-
-
-    #---------
-
-    def __main_loop(self):
-        while self.loop:
-            # [1] check for input, and set it in Commands
-            com.current_voice_input = self.stt.get_transcribed_phrase()
-
-            input_text = com.get_current_input_text()
-
-            if input_text:
-                # output input to bottom bar?
-                nl_print(f'input: "{input_text}"')
-
-            # [2] go through each sub_program from highest to lowest prioirty
-            # if any use the input (return True), then end the current cycle and start over again
-            for prog in com.sub_progs:
-                response = prog.main(input)
-                if response == 'done':
-                    com.terminate_sub_program(prog.name_id)
-                elif response == True:
-                    break
-                else:
-                    continue
-
-            # append command stuff to the log
-
-    def run(self):
-        sys.nl_print('loading...')
-        self.loop = True
-        # start voice transcriber
-        sys.Vox.start_listening()
-        # set the transcriber vocabulary
-        # ...
-        # launch the voice controller, which will check input for new commands
-        com.spawn_sub_program(sub_programs.VoiceController, 'voice controller')
-        # start main loop thread
-        t = Thread(target=self.__main_loop, daemon=True)
-        t.start()
-        # start GUI
-        GUI.run_GUI()   # must be called from main thread, will persist
-
-    def shutdown(self):
-        nl_print('shutting down...')
-        self.loop = False
-        self.stt.stop_listening()
-        GUI.terminate_GUI()
-
-    #---------
-
-
-
-
-
-
-
-
-
-class BaseProgram:
+class CheckConditionsSpawnCommands:
     def __init__(self):
         # for voice input validation
         self.last_wake_time = None
@@ -112,7 +43,8 @@ class BaseProgram:
         self.last_wake_time = datetime.now()
         return True
 
-    def command_check(self):
+
+    def __call__(self):
         # [2] try getting action from input
         for command in self.command_reference:
             name = command.get('name')
@@ -145,6 +77,67 @@ class BaseProgram:
                     func()
                 
                 return True
+
+#-------------------------------
+
+class MainController():
+    def __init__(self):
+        self.loop = False
+        self.progs = []                     # should store active sub-program objects
+        self.current_prog_focus = None
+        self.main_program = CheckConditionsSpawnCommands
+
+        # initialize main prog
+
+    #---------
+
+    def main_loop(self):
+        while self.loop:
+            # [1] check for input - restart loop if none
+            input_package = ST.Vox.get_transcribed_phrase()
+            if not input_package:
+                continue
+            input_text = input_package.get('text')
+            ST.nl_print(f'input: "{input_text}"')
+
+            # [2] run main program and pass it input
+            main = self.main_program(input_package)
+            # check if it uses input
+            if main:
+                continue
+
+            # [3] if main program didn't use input, pass it to the program/command currently in focus
+            #...
+            
+
+
+            # append command stuff to the log
+
+    def run(self):
+        ST.nl_print('loading...')
+        self.loop = True
+        # start voice transcriber
+        ST.Vox.start_listening()
+        # set the transcriber vocabulary
+        # ...
+        # launch the voice controller, which will check input for new commands
+        com.spawn_sub_program(sub_programs.VoiceController, 'voice controller')
+        # start main loop thread
+        t = Thread(target=self.__main_loop, daemon=True)
+        t.start()
+        # start GUI
+        ST.GUI_tk.run_GUI()         # must be called from main thread, will persist
+
+    def shutdown(self):
+        nl_print('shutting down...')
+        self.loop = False
+        self.stt.stop_listening()
+        GUI.terminate_GUI()
+
+    #---------
+
+
+
 
 
 #-------------------------------

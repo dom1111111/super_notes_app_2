@@ -14,7 +14,6 @@ from external_scripts import stt_engine, play_rec_audio, nodes, GUI_tk, whisper_
 Vox = stt_engine.VoiceToText()
 
 Lib = nodes.ReadWriteNodes()
-# consider turning into static class?
 
 #-------------------------------
 # General Tools
@@ -59,7 +58,6 @@ def validate_if_within_timeout(current_time:datetime, last_time:datetime, timeou
 def nl_print(message:str=None):
     print('\n' + message)
 
-
 #-------------------------------
 
 # this is used soley to keep track of functions
@@ -90,5 +88,3 @@ function_refference = {
     # storage IO
     'create node':              Lib.create_node,
 }
-
-

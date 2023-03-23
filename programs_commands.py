@@ -4,7 +4,7 @@ from time import sleep
 from queue import Queue
 from threading import Thread, Lock
 
-import commands
+import system_tools as ST
 
 # eventually split up commands into multiple scripts, and import them into this??
 
@@ -13,24 +13,24 @@ import commands
 # IF NAME IS NOT NEEDED, THEN CONVERT TO DICT, WHERE KEY IS CONDITION, AND VALUE IS COMMAND
 
 command_reference = {
-    (Coms.match_keywords, ('create', 'note')):      CreateNoteQuick,
-    (Coms.match_keywords, ('exit', 'app')):         Coms.end_loop
+    (ST.match_keywords, ('create', 'note')):      CreateNoteQuick,
+    (ST.match_keywords, ('exit', 'app')):         ST.end_loop
 }
 
 command_reference = [
     {
         'name':         'New Note',
-        'conditions':   [(Coms.match_keywords, ('create', 'note'))],
+        'conditions':   [(ST.match_keywords, ('create', 'note'))],
         'command':      CreateNoteQuick
     },
     {
         'name':         'Calculator',
-        'conditions':   [(Coms.match_keywords, ('create', 'note'))],
+        'conditions':   [(ST.match_keywords, ('create', 'note'))],
         'command':      Calculator
     },
     {
         'name':         'Shutdown',
-        'conditions':   [(com.match_keywords, ('exit', 'app'))],
+        'conditions':   [(ST.match_keywords, ('exit', 'app'))],
         'command':      Coms.end_loop
     }
 
@@ -41,7 +41,6 @@ command_reference = [
 
 
 #-------------------------------
-# Sub-Program Parent Class
 
 class SingleItemContainer:
     def __init__(self):
@@ -59,10 +58,10 @@ class SingleItemContainer:
             self.__item = None  
             return item
 
-
+# Sub-Program Parent Class
 class PersistentCommand:
     def __init__(self, name:str, command_function):
-        self.time_id = datetime.now().strftime(Coms.time_str_format_1)
+        self.time_id = datetime.now().strftime(ST.time_str_format_1)
         self.name = name
         self.vocabulary = None
         self.GUI_code = None
