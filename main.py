@@ -1,4 +1,5 @@
-from threading import Thread
+from threading import Thread, Lock
+from queue import Queue
 from datetime import datetime
 
 import system_tools as ST
@@ -6,14 +7,64 @@ import programs_commands as PC
 
 #-------------------------------
 
-class CheckConditionsSpawnCommands:
+class Requests:
     def __init__(self):
+        self.mutex = Lock()
+        self.requests = []
+    
+    def add(self, source_id:int, func, args:tuple):
+        request = {
+            'id':   source_id,
+            'func': func,
+            'args': args
+        }
+        with self.mutex:
+            self.requests.append(request)
+
+    def get(self):
+        with self.mutex:
+            # return item value, and reset it to None
+            return item
+
+#-------------------------------
+
+class MainController():
+    def __init__(self):
+        self.loop = False
+        self.progs = []                     # should store active sub-program objects
+        self.current_prog_focus = None
+        
+        self.requests = Queue()
+
         # for voice input validation
         self.last_wake_time = None
-        self.wake_timeout = 5           # in seconds
+        self.wake_timeout = 5               # in seconds
+
+        # stores all commands which can be done by input as the base level
+        input_command_reference = [
+            {
+                'name':         'New Note',
+                'condition':    ('create', 'note'),
+                'command':      PC.CreateNoteQuick
+            },
+            {
+                'name':         'Calculator',
+                'condition':    (),
+                'command':      PC.Calculator
+            },
+            {
+                'name':         'Shutdown',
+                'condition':    ('exit', 'app'),
+                'command':      self.shutdown
+            }
+            # undo
+            # redo
+        ]
+
+    #---------
 
     def spawn_sub_program(self, program_object, name:str):
-        self.nl_print(f'starting sub_program: "{name}"')
+        ST.nl_print(f'starting sub_program: "{name}"')
         prog = program_object(name)                     # instatiate the object
         self.sub_progs.append(prog)                     # add object to sub_progs list
         self.sub_progs.sort(key=lambda x: x.priority)   # sort sub_progs list by object attribute: "priority"
@@ -25,7 +76,7 @@ class CheckConditionsSpawnCommands:
                 self.sub_progs.pop(i)
                 break
 
-    def check_if_waking(self):
+    def check_if_waking(self, input_text):
         # get variables from input
         text = com.get_current_input_text()
         time = com.get_current_input_time()
@@ -43,8 +94,8 @@ class CheckConditionsSpawnCommands:
         self.last_wake_time = datetime.now()
         return True
 
-
-    def __call__(self):
+    # check conditions, spawn commands
+    def check_spawn_commands(self):
         # [2] try getting action from input
         for command in self.command_reference:
             name = command.get('name')
@@ -78,17 +129,6 @@ class CheckConditionsSpawnCommands:
                 
                 return True
 
-#-------------------------------
-
-class MainController():
-    def __init__(self):
-        self.loop = False
-        self.progs = []                     # should store active sub-program objects
-        self.current_prog_focus = None
-        self.main_program = CheckConditionsSpawnCommands
-
-        # initialize main prog
-
     #---------
 
     def main_loop(self):
@@ -98,6 +138,7 @@ class MainController():
             if not input_package:
                 continue
             input_text = input_package.get('text')
+            
             ST.nl_print(f'input: "{input_text}"')
 
             # [2] run main program and pass it input
@@ -113,6 +154,10 @@ class MainController():
 
             # append command stuff to the log
 
+    def request_loop(self):
+        while self.loop:
+            pass
+
     def run(self):
         ST.nl_print('loading...')
         self.loop = True
@@ -120,28 +165,24 @@ class MainController():
         ST.Vox.start_listening()
         # set the transcriber vocabulary
         # ...
-        # launch the voice controller, which will check input for new commands
-        com.spawn_sub_program(sub_programs.VoiceController, 'voice controller')
-        # start main loop thread
-        t = Thread(target=self.__main_loop, daemon=True)
-        t.start()
+        # start main loop and request loop in threads
+        main_t = Thread(target=self.main_loop, daemon=True)
+        req_t = Thread(target=self.request_loop, daemon=True)
+        main_t.start()
+        req_t.start()
         # start GUI
         ST.GUI_tk.run_GUI()         # must be called from main thread, will persist
 
     def shutdown(self):
-        nl_print('shutting down...')
+        ST.nl_print('shutting down...')
         self.loop = False
-        self.stt.stop_listening()
-        GUI.terminate_GUI()
-
-    #---------
-
-
-
+        ST.Vox.stop_listening()
+        ST.GUI_tk.terminate_GUI()
 
 
 #-------------------------------
 
 if __name__ == "__main__":
-    run()
+    mc = MainController()
+    mc.run()
     print('goodbye!')

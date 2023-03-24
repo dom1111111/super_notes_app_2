@@ -10,38 +10,6 @@ import system_tools as ST
 
 #-------------------------------
 
-# IF NAME IS NOT NEEDED, THEN CONVERT TO DICT, WHERE KEY IS CONDITION, AND VALUE IS COMMAND
-
-command_reference = {
-    (ST.match_keywords, ('create', 'note')):      CreateNoteQuick,
-    (ST.match_keywords, ('exit', 'app')):         ST.end_loop
-}
-
-command_reference = [
-    {
-        'name':         'New Note',
-        'conditions':   [(ST.match_keywords, ('create', 'note'))],
-        'command':      CreateNoteQuick
-    },
-    {
-        'name':         'Calculator',
-        'conditions':   [(ST.match_keywords, ('create', 'note'))],
-        'command':      Calculator
-    },
-    {
-        'name':         'Shutdown',
-        'conditions':   [(ST.match_keywords, ('exit', 'app'))],
-        'command':      Coms.end_loop
-    }
-
-    # undo
-
-    # redo
-]
-
-
-#-------------------------------
-
 class SingleItemContainer:
     def __init__(self):
         self.__mutex = Lock()
@@ -60,12 +28,13 @@ class SingleItemContainer:
 
 # Sub-Program Parent Class
 class PersistentCommand:
-    def __init__(self, name:str, command_function):
+    def __init__(self, name:str, command_function, request_q:Queue):
         self.time_id = datetime.now().strftime(ST.time_str_format_1)
         self.name = name
         self.vocabulary = None
         self.GUI_code = None
         self.__user_input = SingleItemContainer()
+        self.request_q = request_q
         self.__active = True
         #self.__suspended = True
 
@@ -102,7 +71,8 @@ class PersistentCommand:
             'func': func,
             'args': args
         }
-        # requests_q.put(request)
+        request
+        self.request_q.put(request)
 
 
 #-------------------------------
