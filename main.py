@@ -13,6 +13,9 @@ class Requests:
         self.requests = []
     
     def add(self, source_id:int, func, args:tuple):
+        # check request if it can be done
+        
+        
         request = {
             'id':   source_id,
             'func': func,
