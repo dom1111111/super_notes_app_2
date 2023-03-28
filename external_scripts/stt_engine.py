@@ -126,7 +126,7 @@ class VoskT:
 #-------------
 # main functions
 
-class TTS:
+class VoiceToText:
     def __init__(self):
         self.listener = PhraseDetector()
         self.limited_tran = VoskT()

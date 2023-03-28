@@ -1,90 +1,115 @@
-"""
-this stores all of the standard functions and objects needed by the system
-
-these functions interface with other scripts
-"""
 
 from time import sleep
 from datetime import datetime
+from threading import Lock
 
-from external_scripts import stt_engine, play_rec_audio, nodes, GUI_tk, whisper_transcriber #, VoskT
-
-#-------------------------------
-
-Vox = stt_engine.VoiceToText()
-
-Lib = nodes.ReadWriteNodes()
-
-#-------------------------------
-# General Tools
-
-time_str_format_1 = '%Y%m%d%H%M%S%f'
-common_keywords = {                # even single word combos MUST be tuples - don't foget the comma
-    'app_command_word': ('computer', ),
-    'get':      ('get', 'return', 'retrieve', 'show', 'display', 'read'),
-    'search':   ('search', 'find', 'seek', 'look'),
-    'create':   ('create','make', 'new'),   # 'write', 'start', 'compose'
-    'exit':     ('exit', 'shutdown', 'shut down', 'terminate', 'stop', 'bye', 'goodbye', 'good bye'),
-    'end':      ('end', 'finish', 'complete'),
-    'app':      ('app', 'application', 'program', 'computer'),
-    'note':     ('note', 'text', 'entry', 'page'),
-    'task':     ('task', 'todo', 'to-do'),
-    'recent':   ('recent', 'latest', 'last'),
-    'current':  ('current', 'present'),
-    'today':    ('today', 'todays', "today's")
-}
-
-# check if the specified keywords are present in text
-
-def match_keywords(keyword_names:tuple, text:str):
-    match_count = 0
-    for key in keyword_names:
-        keywords = common_keywords.get(key)
-        for word in keywords:
-            if word in text.lower():
-                match_count += 1
-                break
-    # only return True if each keyword group gets at least one match
-    if match_count >= len(keyword_names):
-        return True
-
-def validate_if_within_timeout(current_time:datetime, last_time:datetime, timeout):
-    if (current_time - last_time).seconds <= timeout:
-        return True
-
-#---------
-# Terminal Output
-
-def nl_print(message:str=None):
-    print('\n' + message)
+from external_scripts import stt_engine, play_rec_audio, nodes, GUI_tk
 
 #-------------------------------
 
-# this is used soley to keep track of functions
-function_refference = {
-    # general tools
-    'match keywords':           match_keywords,
-    'is within timeout':        validate_if_within_timeout,
+class SharedResourceWrapper:
+    def __init__(self):
+        self.mutex = Lock()
 
-    # voice user input
-    'start listening':          Vox.start_listening,
-    'pause listening':          None,
-    'stop listening':           Vox.stop_listening,
-    'get phrase':               Vox.get_transcribed_phrase,
-    'use full vocabulary':      None,
-    'set vocabulary':           None,
-    'add to vocabulary':        None,
-    'reset vocabulary':         None,
+    def __call__(self, func):
+        def wrapper(*args,**kwargs):
+            with self.mutex:
+                func(*args,**kwargs)
+        return wrapper    
 
-    # terminal output
-    'print':                    nl_print,
+#-------------------------------
 
-    # GUI + user output
-    'start GUI':                GUI_tk.run_GUI,
-    'end GUI':                  GUI_tk.terminate_GUI,
-    'output to main view':      GUI_tk.append_to_mainview,
-    'clear main view':          GUI_tk.clear_mainview,
+class GeneralTools:
+    TIME_STR_FRMT_1 = '%Y%m%d%H%M%S%f'
+    KEYWORDS = {                # even single word combos MUST be tuples - don't foget the comma
+        'app_command_word': ('computer', ),
+        'get':      ('get', 'return', 'retrieve', 'show', 'display', 'read'),
+        'search':   ('search', 'find', 'seek', 'look'),
+        'create':   ('create','make', 'new'),   # 'write', 'start', 'compose'
+        'exit':     ('exit', 'shutdown', 'shut down', 'terminate', 'stop', 'bye', 'goodbye', 'good bye'),
+        'end':      ('end', 'finish', 'complete'),
+        'app':      ('app', 'application', 'program', 'computer'),
+        'note':     ('note', 'text', 'entry', 'page'),
+        'task':     ('task', 'todo', 'to-do'),
+        'recent':   ('recent', 'latest', 'last'),
+        'current':  ('current', 'present'),
+        'today':    ('today', 'todays', "today's")
+    }
 
-    # storage IO
-    'create node':              Lib.create_node,
-}
+    # check if the specified keywords are present in text
+    @classmethod
+    def match_keywords(cls, keyword_names:tuple, text:str):
+        match_count = 0
+        for key in keyword_names:
+            keywords = cls.KEYWORDS.get(key)
+            for word in keywords:
+                if word in text.lower():
+                    match_count += 1
+                    break
+        # only return True if each keyword group gets at least one match
+        if match_count >= len(keyword_names):
+            return True
+
+    def validate_if_within_timeout(current_time:datetime, last_time:datetime, timeout):
+        if (current_time - last_time).seconds <= timeout:
+            return True
+
+
+class VoiceInput:
+    Vox = stt_engine.VoiceToText()
+
+    @classmethod
+    def start_listening(cls):
+        cls.Vox.start_listening()
+    
+    @classmethod
+    def stop_listening(cls):
+        cls.Vox.stop_listening()
+
+    @classmethod
+    def get_phrase(cls):
+        cls.Vox.get_audio_phrase()
+
+    @classmethod
+    def transcribe_audio(cls):
+        cls.Vox.transcribe_audio()
+
+
+class TerminalOutput():
+    wrap = SharedResourceWrapper()
+
+    @wrap
+    def nl_print(message:str=None):
+        print('\n' + message)
+
+
+class AudioOutput:
+    wrap = SharedResourceWrapper()
+
+
+class GUI:
+    wrap = SharedResourceWrapper()
+
+    def start_GUI():
+        GUI_tk.run_GUI()
+    
+    def end_GUI():
+        GUI_tk.terminate_GUI()
+    
+    @wrap
+    def output_to_mainview():
+        GUI_tk.append_to_mainview()
+    
+    @wrap
+    def clear_mainview(): 
+        GUI_tk.clear_mainview()
+
+
+class Storage:
+    files = nodes.ReadWriteNodes()
+    wrap = SharedResourceWrapper()
+
+    @classmethod
+    @wrap
+    def create_node(cls):
+        cls.files.create_node()

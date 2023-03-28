@@ -7,30 +7,6 @@ import programs_commands as PC
 
 #-------------------------------
 
-class Requests:
-    def __init__(self):
-        self.mutex = Lock()
-        self.requests = []
-    
-    def add(self, source_id:int, func, args:tuple):
-        # check request if it can be done
-        
-        
-        request = {
-            'id':   source_id,
-            'func': func,
-            'args': args
-        }
-        with self.mutex:
-            self.requests.append(request)
-
-    def get(self):
-        with self.mutex:
-            # return item value, and reset it to None
-            return item
-
-#-------------------------------
-
 class MainController():
     def __init__(self):
         self.loop = False
@@ -81,14 +57,14 @@ class MainController():
 
     def check_if_waking(self, input_text):
         # get variables from input
-        text = com.get_current_input_text()
-        time = com.get_current_input_time()
+        text = ST.get_current_input_text()
+        time = ST.get_current_input_time()
 
         # [1] first validate input for command activation
         # A. validate that either the phrase contains a wake word, or it happened within the wake_timeout
-        if com.match_keywords(('app_command_word', ), text):
+        if ST.match_keywords(('app_command_word', ), text):
             pass
-        elif self.last_wake_time and com.validate_if_within_timeout(time, self.last_wake_time, self.wake_timeout):
+        elif self.last_wake_time and ST.validate_if_within_timeout(time, self.last_wake_time, self.wake_timeout):
             pass
         else:
             return
@@ -118,7 +94,7 @@ class MainController():
                 func = command[0]
                 args = command[1]
 
-                com.nl_print(f'starting command: {name}')
+                ST.nl_print(f'starting command: {name}')
                 self.last_wake_time = None      # reset wake time
 
                 if args:
