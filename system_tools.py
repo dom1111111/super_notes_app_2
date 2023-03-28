@@ -19,6 +19,24 @@ class SharedResourceWrapper:
 
 #-------------------------------
 
+class SharedSingleItemContainer:
+    def __init__(self):
+        self.__mutex = Lock()
+        self.__item = None
+    
+    def set(self, data):
+        with self.__mutex:      # better to use `with` (context manager), than `acquire` and `release` for locks
+            self.__item = data
+
+    def get(self):
+        with self.__mutex:
+            # return item value, and reset it to None
+            item = self.__item
+            self.__item = None  
+            return item
+
+#-------------------------------
+
 class GeneralTools:
     TIME_STR_FRMT_1 = '%Y%m%d%H%M%S%f'
     KEYWORDS = {                # even single word combos MUST be tuples - don't foget the comma

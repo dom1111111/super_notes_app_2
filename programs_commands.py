@@ -10,22 +10,6 @@ import system_tools as ST
 
 #-------------------------------
 
-class SingleItemContainer:
-    def __init__(self):
-        self.__mutex = Lock()
-        self.__item = None
-    
-    def put(self, data):
-        with self.__mutex:      # better to use `with` (context manager), than `acquire` and `release` for locks
-            self.__item = data
-
-    def get(self):
-        with self.__mutex:
-            # return item value, and reset it to None
-            item = self.__item
-            self.__item = None  
-            return item
-
 # Sub-Program Parent Class
 class PersistentCommand:
     def __init__(self, name:str, command_function, request_q:Queue):
@@ -33,7 +17,7 @@ class PersistentCommand:
         self.name = name
         self.vocabulary = None
         self.GUI_code = None
-        self.__user_input = SingleItemContainer()
+        self.__user_input = ST.SharedSingleItemContainer()
         self.request_q = request_q
         self.__active = True
         #self.__suspended = True
