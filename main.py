@@ -37,7 +37,7 @@ class MainProgram:
             # undo
             # redo
         ]
-        self.command_keyword_list = #[for words in ]
+        self.command_keyword_list = [word for word_tup in ST.KEYWORDS.values() for word in word_tup]
 
     #---------
 
@@ -51,41 +51,6 @@ class MainProgram:
         prog = self.progs.get(id)
         prog.end()
         self.progs.pop(id)
-
-    # check conditions, spawn commands
-    def check_spawn_commands(self, text):
-        # [2] try getting action from input
-        for command in self.input_command_reference:
-            name = command.get('name')
-            conditions = command.get('conditions')
-            command = command.get('command')
-            
-            # check each of the comand's conditions - if any fail, then break the loop
-            for condition in conditions:
-                condition_func = condition[0]
-                condition_arg = condition[1]
-                passed = condition_func(condition_arg, text)
-                if not passed:
-                    break
-            
-            # if all of the conditions pass, then do the action
-            if passed:
-                func = command[0]
-                args = command[1]
-
-                ST.TerminalOutput.nl_print(f'starting command: {name}')
-                last_wake_time = None      # reset wake time
-
-                if args:
-                    # check if there is more than one argument, by seeing if args is an iterable
-                    if hasattr(args, '__iter__'):
-                        func(*args)
-                    else:
-                        func(args)
-                else:
-                    func()
-                
-                return True
 
     #---------
 
@@ -107,17 +72,45 @@ class MainProgram:
 
             # [3] if waking, check input for commands
             if waking:
+                #TODO: SET GUI BOTTOM BAR TO TURN GREEN or something
+                ST.TerminalOutput.nl_print('WAKING!')
+                
                 self.last_wake_time = datetime.now()
+                # check if the audio comntains any of the command keywords
                 input_keyword_text = ST.VoiceInput.transcribe_audio(input_audio, self.command_keyword_list) # transcribe audio featuring all possible commands keyboards
                 if input_keyword_text:
-                    command = self.check_spawn_commands(input_keyword_text)
-                    if command:
-                        # do command
+                    # if keywords are present, check each command's condition
+                    for command_dict in self.input_command_reference:
+                        # check the comand's condition
+                        keyword_tup = command.get('condition')
+                        passed = ST.match_keywords(keyword_tup, input_keyword_text)
+                        # if the condition passes, then define passed_command_dict and break the for loop
+                        if passed:
+                            passed_command_dict = command_dict
+                            break
+                    # if a command passes it's condition, call its function
+                    if passed_command_dict:
+                        # get data
+                        name = passed_command_dict.get('name')
+                        command = passed_command_dict.get('command')
+                        func = command[0]
+                        args = command[1]
+                        # 
+                        self.last_wake_time = None      # reset wake time
+                        ST.TerminalOutput.nl_print(f'starting command: {name}')
+                        # do command function
+                        if args:
+                            # check if there is more than one argument, by seeing if args is an iterable
+                            if hasattr(args, '__iter__'):
+                                func(*args)
+                            else:
+                                func(args)
+                        else:
+                            func()
 
             # [4] if not waking, send input to currently in focus program
             else:
                 pass
-
             
             # append command stuff to the log
 
@@ -143,6 +136,6 @@ class MainProgram:
 #-------------------------------
 
 if __name__ == "__main__":
-    #m = MainProgram()
-    #m.run()
+    m = MainProgram()
+    m.run()
     print('goodbye!')

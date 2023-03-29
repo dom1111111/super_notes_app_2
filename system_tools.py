@@ -8,40 +8,7 @@ from typing import Callable, ParamSpec, TypeVar
 from external_scripts import stt_engine, play_rec_audio, nodes, GUI_tk
 
 #-------------------------------
-
-T = TypeVar('T')
-P = ParamSpec('P')
-
-class SharedResourceWrapper:
-    def __init__(self):
-        self.mutex = Lock()
-
-    def __call__(self, func:Callable[P, T]) -> Callable[P, T]:
-        @wraps(func)
-        def wrapper(*args:P.args, **kwargs:P.kwargs) -> T:
-            with self.mutex:
-                result = func(*args,**kwargs)
-            return result
-        return wrapper
-
-#-------------------------------
 # General Tools
-
-class SharedSingleItemContainer:
-    def __init__(self):
-        self.__mutex = Lock()
-        self.__item = None
-    
-    def set(self, data):
-        with self.__mutex:      # better to use `with` (context manager), than `acquire` and `release` for locks
-            self.__item = data
-
-    def get(self):
-        with self.__mutex:
-            # return item value, and reset it to None
-            item = self.__item
-            self.__item = None  
-            return item
 
 TIME_STR_FRMT_1 = '%Y%m%d%H%M%S%f'
 KEYWORDS = {                # even single word combos MUST be tuples - don't foget the comma
@@ -77,6 +44,44 @@ def validate_if_within_timeout(current_time:datetime, last_time:datetime, timeou
         return True
 
 #-------------------------------
+# Tools for Programs
+
+class SharedSingleItemContainer:
+    def __init__(self):
+        self.__mutex = Lock()
+        self.__item = None
+    
+    def set(self, data):
+        with self.__mutex:      # better to use `with` (context manager), than `acquire` and `release` for locks
+            self.__item = data
+
+    def get(self):
+        with self.__mutex:
+            # return item value, and reset it to None
+            item = self.__item
+            self.__item = None  
+            return item
+
+#-------------------------------
+# Object used to wrap methods to make them thread safe
+
+T = TypeVar('T')
+P = ParamSpec('P')
+
+class SharedResourceWrapper:
+    def __init__(self):
+        self.mutex = Lock()
+
+    def __call__(self, func:Callable[P, T]) -> Callable[P, T]:
+        @wraps(func)
+        def wrapper(*args:P.args, **kwargs:P.kwargs) -> T:
+            with self.mutex:
+                result = func(*args,**kwargs)
+            return result
+        return wrapper
+
+#-------------------------------
+# all methods
 
 class VoiceInput:
     Vox = stt_engine.VoiceToText()
