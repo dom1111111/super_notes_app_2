@@ -82,37 +82,34 @@ class MainProgram:
                 # check each command's condition
                 for command_dict in self.input_command_reference:
                     # check the comand's condition
-                    keyword_tup = command.get('condition')
+                    keyword_tup = command_dict.get('condition')
                     passed = ST.match_keywords(keyword_tup, input_text)
-                    # if the condition passes, then define passed_command_dict and break the for loop
+                    # if the condition passes, then call its function and break the loop
                     if passed:
-                        passed_command_dict = command_dict
-                        break
-                # if a command passes it's condition, call its function
-                if passed_command_dict:
-                    # get data
-                    name = passed_command_dict.get('name')
-                    command = passed_command_dict.get('command')
-                    func = command[0]
-                    args = command[1]
-                    # 
-                    self.last_wake_time = None      # reset wake time
-                    ST.TerminalOutput.nl_print(f'starting command: {name}')
-                    # do command function
-                    if args:
-                        # check if there is more than one argument, by seeing if args is an iterable
-                        if hasattr(args, '__iter__'):
-                            func(*args)
+                        # set data
+                        name = command_dict.get('name')
+                        command = command_dict.get('command')
+                        func = command[0]
+                        args = command[1]
+                        self.last_wake_time = None      # reset wake time
+                        ST.TerminalOutput.nl_print(f'starting command: {name}')
+                        # do command function
+                        if args:
+                            # check if there is more than one argument, by seeing if args is an iterable
+                            if hasattr(args, '__iter__'):
+                                func(*args)
+                            else:
+                                func(args)
                         else:
-                            func(args)
-                    else:
-                        func()
+                            func()
+                        
+                        break 
 
             # [4] if not waking, send input to currently in focus program
             else:
                 pass
             
-            # append command stuff to the log
+            # append command stuff to the log?
 
     def run(self):
         ST.TerminalOutput.nl_print('loading...')
