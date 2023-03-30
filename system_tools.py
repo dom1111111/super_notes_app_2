@@ -18,25 +18,26 @@ KEYWORDS = {                # even single word combos MUST be tuples - don't fog
     'create':   ('create','make', 'new'),   # 'write', 'start', 'compose'
     'exit':     ('exit', 'shutdown', 'shut down', 'terminate', 'stop', 'bye', 'goodbye', 'good bye'),
     'end':      ('end', 'finish', 'complete'),
-    'app':      ('app', 'application', 'program', 'computer'),
+    'app':      ('app', 'application', 'system'),
     'note':     ('note', 'text', 'entry', 'page'),
-    'task':     ('task', 'todo', 'to-do'),
+    'task':     ('task', 'todo'),
     'recent':   ('recent', 'latest', 'last'),
     'current':  ('current', 'present'),
     'today':    ('today', 'todays', "today's")
 }
 
 # check if the specified keywords are present in text
-def match_keywords(keyword_names:tuple, text:str):
+def match_keywords(keyword_keys:tuple, text:str):
+    assert isinstance(keyword_keys, tuple)
     match_count = 0
-    for key in keyword_names:
+    for key in keyword_keys:
         keywords = KEYWORDS.get(key)
         for word in keywords:
             if word in text.lower():
                 match_count += 1
                 break
     # only return True if each keyword group gets at least one match
-    if match_count >= len(keyword_names):
+    if match_count >= len(keyword_keys):
         return True
 
 def validate_if_within_timeout(current_time:datetime, last_time:datetime, timeout):
