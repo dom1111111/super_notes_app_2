@@ -19,16 +19,16 @@ class MainProgram:
         self.wake_timeout = 5       # in seconds
         # stores all commands which can be done by input as the base level
         self.input_command_reference = [
-            {
-                'name':         'New Note',
-                'condition':    ('create', 'note'),
-                'command':      (self.spawn_program, PC.CreateNoteQuick)
-            },
-            {
-                'name':         'Calculator',
-                'condition':    (),
-                'command':      (self.spawn_program, PC.Calculator)
-            },
+            #{
+            #    'name':         'New Note',
+            #    'condition':    ('create', 'note'),
+            #    'command':      (self.spawn_program, PC.CreateNoteQuick)
+            #},
+            #{
+            #    'name':         'Calculator',
+            #    'condition':    (),
+            #    'command':      (self.spawn_program, PC.Calculator)
+            #},
             {
                 'name':         'Shutdown',
                 'condition':    ('exit', 'app'),
@@ -57,7 +57,7 @@ class MainProgram:
     def main_loop(self):
         while self.loop:
             # [1] check for input - restart loop if none
-            input_audio = ST.VoiceInput.get_phrase()
+            input_audio = ST.VoiceInput.get_audio_phrase()
             if not input_audio:
                 continue
             input_time = datetime.now()
@@ -74,8 +74,8 @@ class MainProgram:
             if waking:
                 #TODO: SET GUI BOTTOM BAR TO TURN GREEN or something
                 ST.TerminalOutput.nl_print('WAKING!')
-                
                 self.last_wake_time = datetime.now()
+                """
                 # check if the audio comntains any of the command keywords
                 input_keyword_text = ST.VoiceInput.transcribe_audio(input_audio, self.command_keyword_list) # transcribe audio featuring all possible commands keyboards
                 if input_keyword_text:
@@ -106,7 +106,7 @@ class MainProgram:
                             else:
                                 func(args)
                         else:
-                            func()
+                            func()"""
 
             # [4] if not waking, send input to currently in focus program
             else:
@@ -122,6 +122,7 @@ class MainProgram:
         # start main loop in new thread
         main_t = Thread(target=self.main_loop, daemon=True)
         main_t.start()
+        ST.TerminalOutput.nl_print('started!')
         # start GUI
         ST.GUI_tk.run_GUI()         # must be called from main thread, will persist
 

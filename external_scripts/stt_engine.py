@@ -1,7 +1,7 @@
-from datetime import datetime
+from os import path
 import json
 import numpy as np
-from multiprocessing import Process, Queue, cpu_count
+from queue import Queue
 import pyaudio
 from vosk import Model, KaldiRecognizer, SetLogLevel
 import whisper
@@ -95,8 +95,8 @@ class WhisperT:
 
 class VoskT:
     def __init__(self):
-        self.tiny_model_path = "vosk_models/vosk-model-small-en-us-0.15"
-        self.small_model_path = "vosk_models/vosk-model-en-us-0.22-lgraph"
+        self.tiny_model_path = path.join(path.dirname(__file__), "vosk_models/vosk-model-small-en-us-0.15")
+        self.small_model_path = path.join(path.dirname(__file__), "vosk_models/vosk-model-en-us-0.22-lgraph")
         SetLogLevel(-1)                   # disables kaldi output messages
 
         # load model and recognizer
