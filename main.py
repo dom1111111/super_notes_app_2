@@ -30,7 +30,7 @@ class MainProgram:
             #},
             {
                 'name':         'Shutdown',
-                'condition':    ('exit', 'app'),
+                'condition':    ('shutdown',),
                 'command':      (self.shutdown, None)
             }
             # undo
@@ -76,7 +76,7 @@ class MainProgram:
 
             # [3] if waking, check input for commands
             if waking:
-                #TODO: SET GUI BOTTOM BAR TO TURN GREEN or something
+                #TODO: SET GUI BOTTOM BAR TO TURN GREEN or something + make audio cue
                 ST.TerminalOutput.nl_print('WAKING!')
                 self.last_wake_time = datetime.now()
                 # check each command's condition

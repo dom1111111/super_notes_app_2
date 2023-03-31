@@ -1,7 +1,6 @@
-
-from time import sleep
 from datetime import datetime
-from threading import Lock
+from queue import Queue
+from threading import Thread, Lock
 from functools import wraps
 from typing import Callable, ParamSpec, TypeVar
 
@@ -16,8 +15,9 @@ KEYWORDS = {                # even single word combos MUST be tuples - don't fog
     'get':      ('get', 'return', 'retrieve', 'show', 'display', 'read'),
     'search':   ('search', 'find', 'seek', 'look'),
     'create':   ('create','make', 'new'),   # 'write', 'start', 'compose'
-    'exit':     ('exit', 'shutdown', 'shut down', 'terminate', 'stop', 'bye', 'goodbye', 'good bye'),
+    'exit':     ('exit', 'terminate', 'stop'),
     'end':      ('end', 'finish', 'complete'),
+    'shutdown': ('shutdown', 'shut down', 'bye', 'goodbye', 'good bye'),
     'app':      ('app', 'application', 'system'),
     'note':     ('note', 'text', 'entry', 'page'),
     'task':     ('task', 'todo'),
@@ -62,6 +62,53 @@ class SharedSingleItemContainer:
             item = self.__item
             self.__item = None  
             return item
+
+# Sub-Program Parent Class
+class PersistentCommand:
+    def __init__(self, name:str, command_function):
+        self.time_id = datetime.now().strftime(TIME_STR_FRMT_1)
+        self.name = name
+        self.vocabulary = None
+        self.GUI_code = None
+        self.__user_input = SharedSingleItemContainer()
+        self.__active = True
+        #self.__suspended = True
+
+        self.command_function = command_function
+        # start command thread
+        t = Thread(target=self.__run_command, daemon=True)
+        t.start() 
+    
+    def __run_command(self):
+        self.command_function()
+        # request to shut down this command
+        #self.__active = False
+
+    #---------
+
+    def give_input(self, input_data):
+        # check to make sure right type of data? - maybe implement a input_data object class?
+        self.__user_input.set(input_data)
+
+    #def suspend_toggle(self):
+    #    self.__suspended = not self.__suspended
+
+    def end(self):
+        self.__active = False
+
+    #---------
+
+    def get_input(self):
+        self.__user_input.get()
+
+    def __make_request(self, func, args):
+        request = {
+            'id':   self.time_id,
+            'func': func,
+            'args': args
+        }
+        request
+        self.request_q.put(request)
 
 #-------------------------------
 # Object used to wrap methods to make them thread safe
