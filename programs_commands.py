@@ -8,22 +8,15 @@ import system_tools as ST
 #-------------------------------
 # Calculator
 
-class CountUp(ST.PersistentCommand):
-    def __init__(self, name):
-        ST.PersistentCommand.__init__(self, name, self.do)
-        self.n = 0
-
-    def do(self):
-        self.output_print(self.n)
-        self.n += 1
-        sleep(1)
-
 class Calculator(ST.PersistentCommand):
     def __init__(self):
-        ST.PersistentCommand.__init__(name=self.__name__)
+        ST.PersistentCommand.__init__(self.__name__, self.calculate)
+        self.vocabulary = ST.NUMBER_WORDS
     
-    def do(self):
-        pass
+    def calculate(self):
+        ST.GUI.output_to_mainview('Welcome to Calculator!')
+        input_audio = self.get_input_audio()
+
         # output all the stuff to GUI
         # request input text
         # check if it contains any numbers or operators

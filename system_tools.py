@@ -19,11 +19,18 @@ KEYWORDS = {                # even single word combos MUST be tuples - don't fog
     'end':      ('end', 'finish', 'complete'),
     'shutdown': ('shutdown', 'shut down', 'bye', 'goodbye', 'good bye'),
     'app':      ('app', 'application', 'system'),
+    'calculate':('calculate', 'calculator', 'math'),
     'note':     ('note', 'text', 'entry', 'page'),
     'task':     ('task', 'todo'),
     'recent':   ('recent', 'latest', 'last'),
     'current':  ('current', 'present'),
     'today':    ('today', 'todays', "today's")
+}
+ALPHABET = "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z"
+
+NUMBER_WORDS_1 = {
+    'zero': 0,
+
 }
 
 # check if the specified keywords are present in text
@@ -68,47 +75,35 @@ class PersistentCommand:
     def __init__(self, name:str, command_function):
         self.time_id = datetime.now().strftime(TIME_STR_FRMT_1)
         self.name = name
-        self.vocabulary = None
-        self.GUI_code = None
-        self.__user_input = SharedSingleItemContainer()
-        self.__active = True
-        #self.__suspended = True
 
-        self.command_function = command_function
+        self.vocabulary = None
+        self.user_input = SharedSingleItemContainer()
+        self.active = True
+
         # start command thread
-        t = Thread(target=self.__run_command, daemon=True)
+        t = Thread(target=command_function, daemon=True)
         t.start() 
-    
-    def __run_command(self):
-        self.command_function()
-        # request to shut down this command
-        #self.__active = False
 
     #---------
 
-    def give_input(self, input_data):
-        # check to make sure right type of data? - maybe implement a input_data object class?
-        self.__user_input.set(input_data)
-
-    #def suspend_toggle(self):
-    #    self.__suspended = not self.__suspended
+    def give_input_audio(self, audio_data:bytes):
+        self.user_input.set(audio_data)
 
     def end(self):
-        self.__active = False
+        self.active = False
 
     #---------
 
-    def get_input(self):
-        self.__user_input.get()
+    def get_input_audio(self):
+        return self.user_input.get()
 
-    def __make_request(self, func, args):
-        request = {
-            'id':   self.time_id,
-            'func': func,
-            'args': args
-        }
-        request
-        self.request_q.put(request)
+#-------------------------------
+# wraps functions so that arguments can be given easier without yet calling the function
+
+def func_wrap(func, *args):
+    def wrapper():
+        func(*args)
+    return wrapper
 
 #-------------------------------
 # Object used to wrap methods to make them thread safe
@@ -129,7 +124,7 @@ class SharedResourceWrapper:
         return wrapper
 
 #-------------------------------
-# all methods
+# All external script methods
 
 class VoiceInput:
     Vox = stt_engine.VoiceToText()

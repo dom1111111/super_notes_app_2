@@ -23,15 +23,15 @@ class MainProgram:
             #    'condition':    ('create', 'note'),
             #    'command':      (self.spawn_program, PC.CreateNoteQuick)
             #},
-            #{
-            #    'name':         'Calculator',
-            #    'condition':    (),
-            #    'command':      (self.spawn_program, PC.Calculator)
-            #},
+            {
+                'name':         'Calculator',
+                'condition':    ('calculate'),
+                'command':      ST.func_wrap(self.spawn_program, PC.Calculator)
+            },
             {
                 'name':         'Shutdown',
                 'condition':    ('shutdown',),
-                'command':      (self.shutdown, None)
+                'command':      ST.func_wrap(self.shutdown)
             }
             # undo
             # redo
@@ -41,16 +41,20 @@ class MainProgram:
 
     #---------
 
-    def spawn_program(self, program_object, name:str):
-        ST.TerminalOutput.nl_print(f'starting sub_program: "{name}"')
-        prog = program_object(name)                     # instatiate the object
+    def spawn_program(self, program_object):
+        ST.TerminalOutput.nl_print(f'starting sub_program: "{program_object.__name__}"')
+        prog = program_object()                             # instatiate the object
         prog_id = prog.id
-        self.progs.update({prog_id: prog})                   # add object to sub_progs list
+        self.progs.update({prog_id: prog})                  # add object to sub_progs list
+        self.current_prog_focus = prog_id                   # update current program focus
 
     def terminate_program(self, id:str):
         prog = self.progs.get(id)
         prog.end()
         self.progs.pop(id)
+        # reset current program focus if this program was the one in focus
+        if self.current_prog_focus == id:
+            self.current_prog_focus = None
 
     #---------
 
@@ -86,28 +90,18 @@ class MainProgram:
                     passed = ST.match_keywords(keyword_tup, input_text)
                     # if the condition passes, then call its function and break the loop
                     if passed:
-                        # set data
+                        self.last_wake_time = None              # reset wake time
                         name = command_dict.get('name')
+                        ST.TerminalOutput.nl_print(f'doing command: {name}')
                         command = command_dict.get('command')
-                        func = command[0]
-                        args = command[1]
-                        self.last_wake_time = None      # reset wake time
-                        ST.TerminalOutput.nl_print(f'starting command: {name}')
-                        # do command function
-                        if args:
-                            # check if there is more than one argument, by seeing if args is an iterable
-                            if hasattr(args, '__iter__'):
-                                func(*args)
-                            else:
-                                func(args)
-                        else:
-                            func()
-                        
-                        break 
+                        command()                               # do command!
+                    break 
 
             # [4] if not waking, send input to currently in focus program
             else:
-                pass
+                prog_id = self.current_prog_focus
+                prog = self.progs.get(prog_id)
+                prog.give_input_audio(input_audio)
             
             # append command stuff to the log?
 
