@@ -1,104 +1,161 @@
 from threading import Thread, Lock
 from queue import Queue
 from datetime import datetime
+from time import sleep
 
-import system_tools as ST
-import programs_commands as PC
+import shared_resources as SR
+#import programs_commands as PC
+
 
 #-------------------------------
-"""
-class MainProgram:
-    def __init__(self):
-        # stores all commands which can be done by input as the base level
-        self.input_command_reference = [
-            #{
-            #    'name':         'New Note',
-            #    'condition':    ('create', 'note'),
-            #    'command':      (self.spawn_program, PC.CreateNoteQuick)
-            #},
-            {
-                'name':         'Calculator',
-                'condition':    ('calculate'),
-                'command':      ST.func_wrap(self.spawn_program, PC.Calculator)
-            },
-            # undo
-            # redo
-        ]
 
-        self.command_keyword_list_str = ST.get_keywords(all=True)
+class Core():
+    active = False
 
-    def main(self):
-        # check each command's condition
-        for command_dict in self.input_command_reference:
-            # check the comand's condition
-            keyword_tup = command_dict.get('condition')
-            passed = ST.match_keywords(keyword_tup, input_text)
-            # if the condition passes, then call its function and break the loop
-            if passed:
-                self.last_wake_time = None              # reset wake time
-                name = command_dict.get('name')
-                ST.Terminal.nl_print(f'doing command: {name}')
-                command = command_dict.get('command')
-                command()                               # do command!
-            break         
+    progs = {}                  # active program objects
+    main_prog_id = None
+    current_prog_id = None
 
-"""
-
-
-class Main:
-    def __init__(self):
-        self.loop = False
-        self.current_prog_focus = None
-        self.last_sys_focus_time = None
-        self.sys_focus_timeout = 5       # in seconds
-
-        self.system_keywords = ST.get_keywords('wake_words', 'shutdown', 'app')
+    last_focus_time = None
+    focus_timeout = 5           # in seconds
 
     #---------
+    
+    @classmethod
+    def spawn_program(cls, prog_object, make_focus:bool=False):
+        # make sure that the program being spawned is a subclass of Parent Program class
+        assert issubclass(prog_object, SR.PersistentProgram)
+        SR.Terminal.nl_print(f'starting sub_program: "{prog_object.__name__}"')
+        prog = prog_object()                    # instatiate the object
+        prog_id = prog.id
+        cls.progs.update({prog_id: prog})       # add object to sub_progs list
+        if make_focus:
+            cls.current_prog_id = prog_id       # update current program focus
+        return prog_id
 
-    def main_loop(self):
-        while self.loop:
+    @classmethod
+    def terminate_program(cls, id:str):
+        prog = cls.progs.get(id)
+        prog.end()
+        # reset current program focus if this program was the one in focus
+        if cls.current_prog_id == id:
+            cls.current_prog_id = None
+    
+    #---------
+
+    @classmethod
+    def _input_director(cls):
+        while cls.active:
             # [1] check for input - restart loop if none
-            input_audio = ST.VoiceInput.get_audio_phrase()                                          # this is blocking
+            input_audio = SR.VoiceInput.get_audio_phrase()      # this is blocking
             if not input_audio:
                 continue
             input_time = datetime.now()
-            input_text = ST.VoiceInput.transcribe_audio(input_audio, self.system_keywords)
+            input_text = SR.VoiceInput.transcribe_audio(input_audio, SR.WordTools.get_keywords_str('wake_words'))
+
+            # [2] check if input meets focus condition (either has wake_words or within timeout)
+            if input_text and SR.WordTools.match_keywords(('wake_words', ), input_text):
+                in_focus = True
+                cls.last_focus_time = input_time                # set last focus time to time of input
+            elif cls.last_focus_time and SR.TimeTools.validate_if_within_timeout(input_time, cls.last_focus_time, cls.focus_timeout):
+                in_focus = True
+            else:
+                in_focus = False
+            
+            # [3] if in focus, send input to main program, else send to currently in focus program (if there is one)
+            if in_focus:
+                prog = cls.progs.get(cls.main_prog_id)
+                prog.give_input_audio(input_audio)
+            elif cls.current_prog_id:
+                prog = cls.progs.get(cls.main_prog_id)
+                prog.give_input_audio(input_audio)
+
+    @classmethod
+    def run(cls, main_prog):
+        SR.Terminal.nl_print('loading system...')
+        cls.active = True
+        SR.VoiceInput.start_listening()         # start voice transcriber
+        Thread(target=cls._input_director, daemon=True).start()     # start loop is separate thread
+        id = cls.spawn_program(main_prog)       # initiate main program
+        cls.main_prog_id = id
+        SR.Terminal.nl_print('started!')
+        SR.GUI_tk.run_GUI()                     # start GUI     # must be called from main thread, will persist
+
+    @classmethod
+    def shutdown(cls):
+        SR.Terminal.nl_print('shutting down...')
+        cls.active = False
+        SR.VoiceInput.stop_listening()
+        for prog in cls.progs.values():
+            cls.terminate_program(prog.id)
+        SR.GUI.end_GUI()
+
+
+#-------------------------------
+
+def func_wrap(func, *args):
+    def wrapper():
+        func(*args)
+    return wrapper
+
+input_command_reference = [
+    {
+        'name':         'Shutdown',
+        'condition':    ('app' ,'shutdown'),
+        'command':      Core.shutdown
+    },
+    #{
+    #    'name':         'New Note',
+    #    'condition':    ('create', 'note'),
+    #    'command':      SR.func_wrap(self.spawn_program, PC.CreateNoteQuick, True)
+    #},
+    #{
+    #    'name':         'Calculator',
+    #    'condition':    ('calculate'),
+    #    'command':      SR.func_wrap(self.spawn_program, PC.Calculator, True)
+    #},
+    # undo
+    # redo
+]
+
+#---------
+       
+class MainProgram(SR.PersistentProgram):
+    def __init__(self):
+        super().__init__("MAIN_PROG", self.main_loop)
+        self.command_keyword_list_str = SR.WordTools.get_keywords_str(all=True)
+
+    def main_loop(self):
+        while self.active:
+            # [1] check for input - restart loop if none
+            input_audio = self._get_input_audio()
+            if not input_audio:
+                sleep(0.01)
+                continue
+            input_text = SR.VoiceInput.transcribe_audio(input_audio, self.command_keyword_list_str)
             if not input_text:
                 continue
-            ST.Terminal.nl_print(' > voice: ' + input_text)
 
-            # [2] check if input meets system focus condition (either has wake_words or within timeout)
-            if ST.match_keywords(('wake_words', ), input_text):
-                sys_focus = True
-            elif self.last_wake_time and ST.validate_if_within_timeout(input_time, self.last_wake_time, self.sys_focus_timeout):
-                sys_focus = True
-            else:
-                sys_focus = False
-
-            # [3] if sys_focus, check input for basic system commands
-            if sys_focus:
-                #TODO: SET GUI BOTTOM BAR TO TURN GREEN or something + make audio cue
-                ST.Terminal.nl_print('WAKING!')
-                self.last_wake_time = datetime.now()
-                # check each command's condition
-                ## SHUTDOWN
-                if ST.match_keywords(('shutdown', ), input_text):
-                    self.shutdown()
-
-            # [4] if not sys_focus, send input to currently in focus program
-            elif self.current_prog_focus:
-                prog_id = self.current_prog_focus
-                prog = self.progs.get(prog_id)
-                prog.give_input_audio(input_audio)
-            
-            # append command stuff to the log?
-
+            SR.Terminal.nl_print(f'>>> Voice: "{input_text}"')
+        
+            # [2] check each command's condition
+            for command_dict in input_command_reference:
+                # check the comand's condition
+                keyword_tup = command_dict.get('condition')
+                passed = SR.WordTools.match_keywords(keyword_tup, input_text)
+                # if the condition passes, then call its function and break the loop
+                if passed:
+                    Core.last_focus_time = None             # reset last focus time
+                    name = command_dict.get('name')
+                    SR.Terminal.nl_print(f'doing command: {name}')
+                    command = command_dict.get('command')
+                    command()                               # do command!
+                break  
 
 
 #-------------------------------
 
 if __name__ == "__main__":
-    m = System()
-    m.run()
+    # either start main program here, or pass it as an argument to run
+    Core.run(MainProgram)
     print('goodbye!')

@@ -3,11 +3,14 @@ from queue import Queue
 from threading import Thread, Lock
 from functools import wraps
 from typing import Callable, ParamSpec, TypeVar
+import pyttsx3
 
+# these are system scripts
 from external_scripts import stt_engine, play_rec_audio, nodes, GUI_tk
 
+
 #-------------------------------
-# Tools for Programs
+# Program Objects
 
 class SharedSingleItemContainer:
     def __init__(self):
@@ -25,13 +28,12 @@ class SharedSingleItemContainer:
             self.__item = None  
             return item
 
-# Sub-Program Parent Class
-class PersistentCommand:
+# Program Parent Class
+class PersistentProgram:
     def __init__(self, name:str, command_function):
-        self.time_id = datetime.now().strftime(TimeTools.TIME_STR_FRMT_1)
+        self.id = datetime.now().strftime(TimeTools.TIME_STR_FRMT_1)
         self.name = name
 
-        self.vocabulary = None
         self.user_input = SharedSingleItemContainer()
         self.active = True
 
@@ -49,16 +51,8 @@ class PersistentCommand:
 
     #---------
 
-    def get_input_audio(self):
+    def _get_input_audio(self):
         return self.user_input.get()
-
-#-------------------------------
-# wraps functions so that arguments can be given easier without yet calling the function
-
-def func_wrap(func, *args):
-    def wrapper():
-        func(*args)
-    return wrapper
 
 #-------------------------------
 # Object used to wrap methods to make them thread safe
@@ -80,7 +74,7 @@ class SharedResourceWrapper:
 
 
 #-------------------------------
-# All main methods organized into static classes
+# Common Functions
 
 class WordTools:
     KEYWORDS = {                # even single word combos MUST be tuples - don't foget the comma
@@ -101,7 +95,7 @@ class WordTools:
     }
 
     @classmethod
-    def get_keywords(cls, *keys:str, all:bool=False):
+    def get_keywords_str(cls, *keys:str, all:bool=False):
         keywords = ''
         if all:
             # brings all command keywords into a list, removes duplicates, and joins them into a single string
@@ -130,11 +124,25 @@ class WordTools:
 
 class TimeTools:
     TIME_STR_FRMT_1 = '%Y%m%d%H%M%S%f'
+    TIME_STR_FRMT_2 = '%I:%M %p'
+    DATE_STR_FRMT_1 = '%Y %B %d, %A'
+    DATE_STR_FRMT_2 = '%A, %B %d'
 
-    def validate_if_within_timeout(current_time:datetime, last_time:datetime, timeout):
+    def validate_if_within_timeout(current_time:datetime, last_time:datetime, timeout:int):
         if (current_time - last_time).seconds <= timeout:
             return True
 
+    @classmethod
+    def today(cls):
+        return datetime.now().strftime(cls.DATE_STR_FRMT_2)
+
+    @classmethod
+    def now_time(cls):
+        return datetime.now().strftime(cls.TIME_STR_FRMT_2)
+
+
+#-------------------------------
+# All IO methods organized into static classes
 
 class VoiceInput:
     Vox = stt_engine.VoiceToText()
@@ -151,6 +159,19 @@ class VoiceInput:
         transcription = cls.Vox.transcribe_audio(audio_data, )
         # add code to convert number words to numbers intelgently
         return transcription
+
+
+class VoiceOutput:
+    tts_eng = pyttsx3.init()
+
+    @classmethod
+    def say(cls, mes:str):
+        cls.tts_eng.say(mes)
+        cls.tts_eng.runAndWait()
+    
+    @classmethod
+    def shutup(cls):
+        cls.tts_eng.stop()
 
 
 class AudioOutput:
@@ -182,53 +203,3 @@ class Storage:
     __wrap = SharedResourceWrapper()
 
     create_node = __wrap(files.create_node)
-
-
-#-------------------------------
-
-class System:
-    active = False
-    """
-    # active sub-program objects
-    progs = {}
-    
-    @classmethod
-    def spawn_program(cls, program_object):
-        Terminal.nl_print(f'starting sub_program: "{program_object.__name__}"')
-        prog = program_object()                             # instatiate the object
-        prog_id = prog.id
-        cls.progs.update({prog_id: prog})                  # add object to sub_progs list
-        cls.current_prog_focus = prog_id                   # update current program focus
-
-    @classmethod
-    def terminate_program(cls, id:str):
-        prog = cls.progs.get(id)
-        prog.end()
-        cls.progs.pop(id)
-        # reset current program focus if this program was the one in focus
-        if cls.current_prog_focus == id:
-            cls.current_prog_focus = None
-    """
-    def run(self):
-        Terminal.nl_print('loading system...')
-        self.active = True
-        # start voice transcriber
-        VoiceInput.start_listening()
-        """
-        # start main loop in new thread
-        # main_t = Thread(target=self.main_loop, daemon=True)
-        # main_t.start()
-        """
-        Terminal.nl_print('started!')
-        # start GUI
-        GUI_tk.run_GUI()         # must be called from main thread, will persist
-
-    def shutdown(self):
-        Terminal.nl_print('shutting down...')
-        self.active = False
-        VoiceInput.stop_listening()
-        """
-        #for prog in self.progs:
-        #    self.terminate_program(prog.id)
-        """
-        GUI.end_GUI()
