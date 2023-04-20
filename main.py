@@ -1,7 +1,8 @@
-from threading import Thread, Lock
+from threading import Thread, Lock, active_count
 from queue import Queue
 from datetime import datetime
 from time import sleep
+from os import path
 
 import shared_resources as SR
 #import programs_commands as PC
@@ -49,6 +50,7 @@ class Core():
             # [1] check for input - restart loop if none
             input_audio = SR.VoiceInput.get_audio_phrase()      # this is blocking
             if not input_audio:
+                sleep(0.01)
                 continue
             input_time = datetime.now()
             input_text = SR.VoiceInput.transcribe_audio(input_audio, SR.WordTools.get_keywords_str('wake_words'))
@@ -93,33 +95,54 @@ class Core():
 
 #-------------------------------
 
-def func_wrap(func, *args):
-    def wrapper():
-        func(*args)
-    return wrapper
+class CommFuncs:
+    def say_time():
+        SR.VoiceOutput.say(f'it is currently {SR.TimeTools.get_current_time()}')
 
-input_command_reference = [
-    {
-        'name':         'Shutdown',
-        'condition':    ('app' ,'shutdown'),
-        'command':      Core.shutdown
-    },
-    #{
-    #    'name':         'New Note',
-    #    'condition':    ('create', 'note'),
-    #    'command':      SR.func_wrap(self.spawn_program, PC.CreateNoteQuick, True)
-    #},
-    #{
-    #    'name':         'Calculator',
-    #    'condition':    ('calculate'),
-    #    'command':      SR.func_wrap(self.spawn_program, PC.Calculator, True)
-    #},
-    # undo
-    # redo
-]
+    def say_date():
+        SR.VoiceOutput.say(f'it is {SR.TimeTools.get_current_date()}')
+
+
+def get_command_from_input(txt_inpt:str):
+    input_command_reference = [
+        {
+            'name':         'Shutdown',
+            'condition':    SR.WordTools.match_keywords(('app' ,'shutdown'), txt_inpt),
+            'command':      Core.shutdown
+        },
+        {
+            'name':         'Get Time',
+            'condition':    SR.WordTools.match_keywords(('time',), txt_inpt),
+            'command':      CommFuncs.say_time     
+        },
+        {
+            'name':         'Get Date',
+            'condition':    SR.WordTools.match_keywords(('date',), txt_inpt),
+            'command':      CommFuncs.say_date       
+        },
+        #{
+        #    'name':         'New Note',
+        #    'condition':    ('create', 'note'),
+        #    'command':      func_wrap(self.spawn_program, PC.CreateNoteQuick, True)
+        #},
+        #{
+        #    'name':         'Calculator',
+        #    'condition':    ('calculate'),
+        #    'command':      func_wrap(self.spawn_program, PC.Calculator, True)
+        #},
+        # undo
+        # redo
+    ]
+    for command_dict in input_command_reference:
+        # check the comand's condition
+        condition = command_dict.get('condition')
+        # if the condition passes, return the command
+        if condition:
+            print('got it!')
+            return command_dict
 
 #---------
-       
+
 class MainProgram(SR.PersistentProgram):
     def __init__(self):
         super().__init__("MAIN_PROG", self.main_loop)
@@ -139,18 +162,14 @@ class MainProgram(SR.PersistentProgram):
             SR.Terminal.nl_print(f'>>> Voice: "{input_text}"')
         
             # [2] check each command's condition
-            for command_dict in input_command_reference:
-                # check the comand's condition
-                keyword_tup = command_dict.get('condition')
-                passed = SR.WordTools.match_keywords(keyword_tup, input_text)
-                # if the condition passes, then call its function and break the loop
-                if passed:
-                    Core.last_focus_time = None             # reset last focus time
-                    name = command_dict.get('name')
-                    SR.Terminal.nl_print(f'doing command: {name}')
-                    command = command_dict.get('command')
-                    command()                               # do command!
-                break  
+            command_dict = get_command_from_input(input_text)
+            # if a command is returned, then do it!
+            if command_dict:
+                self.last_focus_time = None                 # reset last focus time
+                name = command_dict.get('name')
+                SR.Terminal.nl_print(f'doing command: {name}')
+                command = command_dict.get('command')
+                command()
 
 
 #-------------------------------

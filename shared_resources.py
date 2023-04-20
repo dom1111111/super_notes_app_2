@@ -1,4 +1,6 @@
 from datetime import datetime
+from time import sleep
+from os import path
 from queue import Queue
 from threading import Thread, Lock
 from functools import wraps
@@ -6,8 +8,7 @@ from typing import Callable, ParamSpec, TypeVar
 import pyttsx3
 
 # these are system scripts
-from external_scripts import stt_engine, play_rec_audio, nodes, GUI_tk
-
+from external_scripts import stt_engine, play_rec_audio, nodes, GUI_tk, tts
 
 #-------------------------------
 # Program Objects
@@ -80,6 +81,7 @@ class WordTools:
     KEYWORDS = {                # even single word combos MUST be tuples - don't foget the comma
         'wake_words': ('computer', ),
         'get':      ('get', 'return', 'retrieve', 'show', 'display', 'read'),
+        'what':     ('what', "what's", 'what is'),
         'search':   ('search', 'find', 'seek', 'look'),
         'create':   ('create','make', 'new'),   # 'write', 'start', 'compose'
         'exit':     ('exit', 'terminate', 'stop'),
@@ -90,8 +92,11 @@ class WordTools:
         'note':     ('note', 'text', 'entry', 'page'),
         'task':     ('task', 'todo'),
         'recent':   ('recent', 'latest', 'last'),
-        'current':  ('current', 'present'),
-        'today':    ('today', 'todays', "today's")
+        'current':  ('current', 'present', 'now'),
+        'time':     ('time', ),
+        'date':     ('date', ),
+        'today':    ('today', 'todays', "today's"),
+        'sound':    ('sound', 'audio', 'noise')
     }
 
     @classmethod
@@ -133,12 +138,12 @@ class TimeTools:
             return True
 
     @classmethod
-    def today(cls):
-        return datetime.now().strftime(cls.DATE_STR_FRMT_2)
+    def get_current_time(cls):
+        return datetime.now().strftime(cls.TIME_STR_FRMT_2)
 
     @classmethod
-    def now_time(cls):
-        return datetime.now().strftime(cls.TIME_STR_FRMT_2)
+    def get_current_date(cls):
+        return datetime.now().strftime(cls.DATE_STR_FRMT_2)
 
 
 #-------------------------------
@@ -162,20 +167,20 @@ class VoiceInput:
 
 
 class VoiceOutput:
-    tts_eng = pyttsx3.init()
+    __wrap = SharedResourceWrapper()
+    comp_vox = tts.ComputerVoice()
 
-    @classmethod
-    def say(cls, mes:str):
-        cls.tts_eng.say(mes)
-        cls.tts_eng.runAndWait()
-    
-    @classmethod
-    def shutup(cls):
-        cls.tts_eng.stop()
+    say = __wrap(comp_vox.say)
+    shutup = __wrap(comp_vox.shutup)
 
 
 class AudioOutput:
     __wrap = SharedResourceWrapper()
+    _player = play_rec_audio.PlayAudio()
+
+    @classmethod
+    def play_file(cls, path):
+        cls._player.play(path)
 
 
 class Terminal():

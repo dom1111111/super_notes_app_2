@@ -1,21 +1,27 @@
+"""
+tools for voice transcription!
+
+instatiate `VoiceToText` class and use its methods
+"""
+
 from os import path
 import json
 import numpy as np
 from queue import Queue
-import pyaudio
 from vosk import Model, KaldiRecognizer, SetLogLevel
 import whisper
+from .play_rec_audio import RecAudio
 
 #-------------
 
-class PhraseDetector:
+class _PhraseDetector:
     """
     - `start_stream` to start recording audio and detecting phrases
     - `get_audio` to get a "phrase" of audio
     - `stop_stream` to stop recording
     """
     def __init__(self):
-        self.p = pyaudio.PyAudio()
+        self.rec = RecAudio()
         self.audio_threshold = 675                  # value from 0-65535 (65535 is the max possible value for int16 array (unbalanced) of audio data) 
         self.minimum_phrase_length = 0.3            # in seconds
         self.chunks_per_second = 5
@@ -29,7 +35,7 @@ class PhraseDetector:
         return sample_value_range
 
     # 2. capture phrases from audio stream
-    def __detect_phrase(self, chunk):
+    def __detect_phrase(self, chunk:bytes):
         audio_power = self.__get_audio_power(chunk)
         minimum_chunks = round(self.minimum_phrase_length * self.chunks_per_second)
 
@@ -48,25 +54,22 @@ class PhraseDetector:
 
     # 1. record audio stream
     def start_stream(self):
-        self.stop_stream()                    # close the stream if one is already open
-
-        def callback(in_data, frame_count, time_info, status):
+        def callback_detect_phrase(in_data:bytes):
             self.__detect_phrase(in_data)
-            return (in_data, pyaudio.paContinue)
-
+        
+        self.rec.set_callback(callback_detect_phrase)       # set recording callback to `callback_detect_phrase` function
+        
         SAMPLE_RATE = 16000
-        self.stream = self.p.open(
-            format = pyaudio.paInt16,           # 16 bit depth (2 bytes long)
-            rate = SAMPLE_RATE,
-            channels = 1,
-            frames_per_buffer = round(SAMPLE_RATE/self.chunks_per_second),     # buffer size
-            input = True,
-            stream_callback = callback
-            )
+        self.rec.set_pars(                                  # set the recording audio parameters
+            chunk_size = round(SAMPLE_RATE/self.chunks_per_second),
+            n_channels = 1,
+            rate = SAMPLE_RATE
+        )
+        
+        self.rec.record()                                   # start recording!
 
     def stop_stream(self):
-        if hasattr(self, 'stream'):
-            self.stream.close()
+        self.rec.stop()
 
     def get_audio(self) -> bytes:
         try:
@@ -76,7 +79,7 @@ class PhraseDetector:
 
 #-------------
 
-class WhisperT:
+class _WhisperT:
     def __init__(self):
         self.model = whisper.load_model("tiny.en") # choice between ["tiny", "base", "small", "medium", "large"]
 
@@ -93,7 +96,7 @@ class WhisperT:
         else:
             return None
 
-class VoskT:
+class _VoskT:
     def __init__(self):
         self.tiny_model_path = path.join(path.dirname(__file__), "vosk_models/vosk-model-small-en-us-0.15")
         self.small_model_path = path.join(path.dirname(__file__), "vosk_models/vosk-model-en-us-0.22-lgraph")
@@ -128,9 +131,9 @@ class VoskT:
 
 class VoiceToText:
     def __init__(self):
-        self.listener = PhraseDetector()
-        self.limited_tran = VoskT()
-        self.full_tran = WhisperT()
+        self.listener = _PhraseDetector()
+        self.limited_tran = _VoskT()
+        self.full_tran = _WhisperT()
 
     def start_listening(self):
         self.listener.start_stream()
