@@ -16,7 +16,7 @@ class ComputerVoice:
         #with wave.open(_file, 'wb') as f:
         #    f.setparams((1, 2, 22050, 0, 'NONE', 'not compressed'))
 
-    def say(self, message:str, wpm:int=200):
+    def say(self, message:str, wpm:int=200, wait:bool=False):
         assert isinstance(message, str) and isinstance(wpm, int)
         self._player.stop()                                 # first stops audio (and closes stream) - this is neccessary even if no audio is playing, otherwise new messages can't be created!
         self._engine.setProperty('rate', wpm)               # sets speaking rate in wpm (default is 200)
@@ -24,7 +24,10 @@ class ComputerVoice:
             self._engine.save_to_file(message, self._file)  # create tts audio file from message
             self._engine.runAndWait()
         self._current_message = message
-        self._player.play(self._file)                       # play tts audio file
+        if wait:
+            self._player.play(self._file, True)             # play tts audio file and block until it's done playing
+        else:
+            self._player.play(self._file)                   # play tts audio file
 
     def shutup(self):
         self._player.stop()

@@ -4,11 +4,9 @@ from os import path
 from queue import Queue
 from threading import Thread, Lock
 from functools import wraps
-from typing import Callable, ParamSpec, TypeVar
-import pyttsx3
 
 # these are system scripts
-from external_scripts import stt_engine, play_rec_audio, nodes, GUI_tk, tts
+from external_scripts import nodes
 
 #-------------------------------
 # Program Objects
@@ -54,25 +52,6 @@ class PersistentProgram:
 
     def _get_input_audio(self):
         return self.user_input.get()
-
-#-------------------------------
-# Object used to wrap methods to make them thread safe
-
-T = TypeVar('T')
-P = ParamSpec('P')
-
-class SharedResourceWrapper:
-    def __init__(self):
-        self.mutex = Lock()
-
-    def __call__(self, func:Callable[P, T]) -> Callable[P, T]:
-        @wraps(func)
-        def wrapper(*args:P.args, **kwargs:P.kwargs) -> T:
-            with self.mutex:
-                result = func(*args,**kwargs)
-            return result
-        return wrapper
-
 
 #-------------------------------
 # Common Functions
@@ -149,62 +128,7 @@ class TimeTools:
 #-------------------------------
 # All IO methods organized into static classes
 
-class VoiceInput:
-    Vox = stt_engine.VoiceToText()
-    ALPHABET = "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z"
-
-    start_listening = Vox.start_listening
-    stop_listening = Vox.stop_listening
-    get_audio_phrase = Vox.get_audio_phrase
-    transcribe_audio = Vox.transcribe_audio
-
-    @classmethod
-    def common_transcribe_audio(cls, audio_data:bytes) -> str:
-        vocab = None # VOCAB IS ALL STANDARD KEYWORDS + NUMER WORDS
-        transcription = cls.Vox.transcribe_audio(audio_data, )
-        # add code to convert number words to numbers intelgently
-        return transcription
-
-
-class VoiceOutput:
-    __wrap = SharedResourceWrapper()
-    comp_vox = tts.ComputerVoice()
-
-    say = __wrap(comp_vox.say)
-    shutup = __wrap(comp_vox.shutup)
-
-
-class AudioOutput:
-    __wrap = SharedResourceWrapper()
-    _player = play_rec_audio.PlayAudio()
-
-    @classmethod
-    def play_file(cls, path):
-        cls._player.play(path)
-
-
-class Terminal():
-    __wrap = SharedResourceWrapper()
-
-    @__wrap
-    def nl_print(message:str):
-        print('\n' + message)
-
-
-class GUI:
-    #windows
-    __wrap = SharedResourceWrapper()
-
-    start_GUI = GUI_tk.run_GUI
-    end_GUI = GUI_tk.terminate_GUI
-    output_to_mainview = __wrap(GUI_tk.append_to_mainview)
-    clear_mainview = __wrap(GUI_tk.clear_mainview)
-
-    #new_window
-
-
 class Storage:
     files = nodes.ReadWriteNodes()
-    __wrap = SharedResourceWrapper()
 
-    create_node = __wrap(files.create_node)
+    create_node = files.create_node

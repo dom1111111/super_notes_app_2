@@ -7,7 +7,7 @@ Two classes that uses the Pyaduio module to start, pause, and stop audio playing
 
 import pyaudio
 import wave
-from inspect import signature
+from time import sleep
 
 pa = pyaudio.PyAudio()                      # instantiate PyAudio
 
@@ -27,18 +27,21 @@ class _BaseAudio:
 
     def get_state(self):
         """
-        returns current state of the stream
+        Returns current state of the stream:
+        * `"OA"`: stream is open and active
+        * `"OP"`: stream is open and paused
+        * `"OI"`: stream is open and inactive
+        * `"C"`: stream is closed
         """
         if hasattr(self, 'stream'):
-            so = 'stream open: '
             if self.stream.is_active():
-                return so + 'active'
+                return 'OA'
             elif self.stream.is_stopped():
-                return so + 'paused'
+                return 'OP'
             else:
-                return so + 'inactive'
+                return 'OI'
         else:
-            return "stream closed"
+            return "C"
     
     @_stream_check_wrapper
     def pause_resume(self):
@@ -53,7 +56,7 @@ class _BaseAudio:
     @_stream_check_wrapper
     def stop(self):
         """
-        stop audio processing and close the stream
+        Stop audio processing and close the stream
         """
         self.stream.close()
         del self.stream                     # this is neccessary to avoid errors!
@@ -63,27 +66,45 @@ class PlayAudio(_BaseAudio):
     * `play(audio_file_path)` - play audio in a seperate thread
     """
 
-    def play(self, audio_file_path:str):
+    def play(self, audio_file_path:str, wait:bool=False):
+        """
+        Play audio in a seperate thread (non-blocking).
+        If `wait` is set to true, then this WILL block for the duration of the audio.
+        """
         # if there is already an open stream, close it first
         if hasattr(self, 'stream'):
             self.stream.close()
 
-        file = wave.open(audio_file_path, 'rb')
+        self.file = wave.open(audio_file_path, 'rb')
+
+        # these are collected in case wait is True
+        framerate = self.file.getframerate()
+        n_frames = self.file.getnframes()
 
         def callback(in_data, frame_count, time_info, status):
-            data = file.readframes(frame_count)
+            data = self.file.readframes(frame_count)
             return (data, pyaudio.paContinue)
 
         # open stream with PyAudio-instance's open()
         self.stream = pa.open(
-            format = pa.get_format_from_width(file.getsampwidth()),
-            channels = file.getnchannels(),
-            rate = file.getframerate(),
+            format = pa.get_format_from_width(self.file.getsampwidth()),
+            channels = self.file.getnchannels(),
+            rate = framerate,
             output = True,                  # 'Specifies whether this is an output stream. Defaults to False.'
             stream_callback = callback
             )
 
         self.stream.start_stream()
+        
+        # if `wait` is True, then sleep (block) for the duration of the audio
+        if wait:
+            audio_duration = n_frames/framerate
+            sleep(audio_duration)
+    
+    # extends the parent class stop() method to also close the audio file
+    def stop(self):
+        super(PlayAudio, self).stop()
+        self.file.close()
 
 class RecAudio(_BaseAudio):
     """
@@ -108,7 +129,7 @@ class RecAudio(_BaseAudio):
     
     def get_pars(self) -> tuple:
         """
-        returns a tuple containing the current audio parameters:
+        Returns a tuple containing the current audio parameters:
         * number of samples per chunk/buffer aka 'chunk/buffer size'
         * number of channels
         * sample rate (number of samples in each second of audio)
@@ -117,7 +138,7 @@ class RecAudio(_BaseAudio):
 
     def set_pars(self, chunk_size:int, n_channels:int, rate:int):
         """
-        pass arguments to set the audio parameters:
+        Pass arguments to set the audio parameters:
         * `chunk_size` - number of samples per chunk
         * `n_channels` - number of channels
         * `rate` - number of samples captured per second
@@ -128,7 +149,7 @@ class RecAudio(_BaseAudio):
 
     def reset_pars(self):
         """
-        resets audio paramters to original values:
+        Resets audio paramters to original values:
         * `CHUNK` = 1024
         * `CHANNELS` = 1
         * `RATE` = 44100
@@ -137,24 +158,24 @@ class RecAudio(_BaseAudio):
 
     def set_callback(self, func):
         """
-        overrides the behaviour of the normal recording callback function and instead calls the procided `func` argument.
+        Overrides the behaviour of the normal recording callback function and instead calls the procided `func` argument.
         
-        the `func` argument given MUST be a function, and accept audio data bytes (pyaudio callback `in_data`) as its only argument
+        The `func` argument given MUST be a function, and accept audio data bytes (pyaudio callback `in_data`) as its only argument
         """
         if callable(func):
             self._callback_func = func
 
     def reset_callback(self):
         """
-        reset recording callback function to standard functionality
+        Reset recording callback function to standard functionality
         """
         self._callback_func = None
     
     def record(self):
         """
-        begin recording audio from default recording device
+        Begin recording audio from default recording device
 
-        call `stop_and_return()` to stop recording and return the audio data (bytes)
+        Call `stop_and_return()` to stop recording and return the audio data (bytes)
         """
         # close the stream if one is already open
         if hasattr(self, 'stream'):
@@ -180,7 +201,7 @@ class RecAudio(_BaseAudio):
 
     def stop_and_return(self) -> bytes:
         """
-        close the audio stream and return audio data
+        Close the audio stream and return audio data
         """
         self.stop()
         if self.audio_frames:                                           # checks if stream is closed and audio frames is not empty
@@ -190,7 +211,7 @@ class RecAudio(_BaseAudio):
     
     def write_to_file(self, audio_data:bytes, file_path:str):
         """
-        takes raw audio data (bytes) and writes it to a wav file
+        Takes raw audio data (bytes) and writes it to a wav file
         """
         if audio_data and isinstance(audio_data, bytes):                # first check that audio data is not none and is a bytes type
             sample_width  = pa.get_sample_size(self.FORMAT)
