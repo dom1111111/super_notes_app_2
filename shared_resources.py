@@ -9,49 +9,37 @@ from functools import wraps
 from external_scripts import nodes
 
 #-------------------------------
-# Program Objects
-
-class SharedSingleItemContainer:
-    def __init__(self):
-        self.__mutex = Lock()
-        self.__item = None
-    
-    def set(self, data):
-        with self.__mutex:      # better to use `with` (context manager), than `acquire` and `release` for locks
-            self.__item = data
-
-    def get(self):
-        with self.__mutex:
-            # return item value, and reset it to None
-            item = self.__item
-            self.__item = None  
-            return item
 
 # Program Parent Class
 class PersistentProgram:
-    def __init__(self, name:str, command_function):
-        self.id = datetime.now().strftime(TimeTools.TIME_STR_FRMT_1)
+    def __init__(self, name:str, program_function):
+        """
+        This is the parent class for programs. All programs should inherit this class.
+
+        Arguments:
+        * `name` is for the name pf the program; should be a string
+        * `program_function` is the main program function, which will be run in a loop and in a new thread. 
+        If the function is not meant to be looped, then `self.active` should be set to `False` at the end of the function
+        """
         self.name = name
-
-        self.user_input = SharedSingleItemContainer()
+        self.user_input = Queue()
         self.active = True
-
-        # start command thread
-        t = Thread(target=command_function, daemon=True)
-        t.start() 
+        # start command thread:
+        def program_function_loop():
+            while self.active:
+                program_function()
+        Thread(target=program_function_loop, daemon=True).start()
 
     #---------
 
-    def give_input_audio(self, audio_data:bytes):
-        self.user_input.set(audio_data)
+    def give_input(self, i):
+        """
+        `i` should be a string or audio data bytes
+        """
+        self.user_input.put(i)
 
     def end(self):
         self.active = False
-
-    #---------
-
-    def _get_input_audio(self):
-        return self.user_input.get()
 
 #-------------------------------
 # Common Functions
@@ -130,5 +118,4 @@ class TimeTools:
 
 class Storage:
     files = nodes.ReadWriteNodes()
-
     create_node = files.create_node

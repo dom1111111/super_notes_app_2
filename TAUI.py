@@ -4,7 +4,7 @@ Includes all needed methods for voice and text input and output.
 All methods are thread safe.
 """
 
-from external_scripts import stt, tts, play_rec_audio, GUI_tk
+from UI_scripts import stt, tts, play_rec_audio, GUI_tk
 from threading import Lock
 from functools import wraps
 
