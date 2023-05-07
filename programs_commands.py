@@ -1,13 +1,44 @@
-from datetime import datetime
-from time import sleep
+from threading import Thread
+from queue import Queue
 
-import system_tools as ST
+#-------------------------------
 
-# eventually split up commands into multiple scripts, and import them into this??
+# Program Parent Class
+class PersistentProgram:
+    def __init__(self, name:str, program_function):
+        """
+        This is the parent class for programs. All programs should inherit this class.
+
+        Arguments:
+        * `name` is for the name of the program; should be a string
+        * `program_function` is the main program function, which will be run in a loop and in a new thread. 
+        If the function is not meant to be looped, then `self.active` should be set to `False` at the end of the function
+        """
+        self.name = name
+        self.user_input = Queue()
+        self.active = True
+        # start command thread:
+        def program_function_loop():
+            while self.active:
+                program_function()
+        Thread(target=program_function_loop, daemon=True).start()
+
+    #---------
+
+    def give_input(self, i):
+        """
+        `i` should be a string or audio data bytes
+        """
+        self.user_input.put(i)
+
+    def end(self):
+        self.active = False
+
 
 #-------------------------------
 # Calculator
 
+"""
 class Calculator(ST.PersistentCommand):
     def __init__(self):
         ST.PersistentCommand.__init__(self.__name__, self.calculate)
@@ -23,7 +54,7 @@ class Calculator(ST.PersistentCommand):
             # convert text to symbols
             # request output for the symbols to the screen
             # if word is "equals" (or "evaulate", etc.), then calculate expression and send further output
-        
+"""    
 
 #-------------------------------
 # Nodes sub-programs
