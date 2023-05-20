@@ -73,7 +73,7 @@ class _PhraseDetector:
 
     def get_audio(self) -> bytes:
         try:
-            return self.audio_q.get(block=False)
+            return self.audio_q.get()
         except:
             return
 
