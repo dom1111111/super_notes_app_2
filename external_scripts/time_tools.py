@@ -1,7 +1,6 @@
-from datetime import datetime, timedelta
-from threading import Thread, Timer
-from time import sleep
-#from play_rec_audio import PlayAudio
+from datetime import datetime
+from threading import Thread, Event
+from time import time
 
 #-------------------------------
 
@@ -20,4 +19,42 @@ def get_current_time(cls):
 def get_current_date():
     return datetime.now().strftime(DATE_STR_FRMT_2)
 
-#class 
+class Timer:
+    """
+    Call a function after a specified timeout in seconds.
+
+    This will start a new thread if the timer has not been started, 
+    but if a timer is restarted while still active, 
+    the previous thread will be kept alive and only the delay timeout will be reset.
+    This way, a new thread is only spawned when needed.
+    """
+    def __init__(self, timeout:int, func, *args):
+        self._timeout = timeout
+        self._func = func
+        self._args = args
+        self._target = time()
+        self._t = Event()
+        self.stop()
+
+    def _main_func(self):
+        self._t.clear()
+        while self.is_active():
+            self._t.wait(self._target - time())
+            if time() >= self._target:
+                self._func(*self._args)
+                self._t.set()
+                break
+
+    def start(self):
+        "start the timer"
+        self._target = time() + self._timeout
+        if not self.is_active():
+            Thread(target=self._main_func, daemon=True).start()
+    
+    def stop(self):
+        "stop and reset the timer"
+        self._t.set()
+
+    def is_active(self):
+        "return `True` if timer is active, and `False` is not"
+        return not self._t.is_set()

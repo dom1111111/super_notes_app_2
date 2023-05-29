@@ -71,9 +71,9 @@ class _PhraseDetector:
     def stop_stream(self):
         self.rec.stop()
 
-    def get_audio(self) -> bytes:
+    def get_audio(self, no_wait:bool=False) -> bytes:
         try:
-            return self.audio_q.get()
+            return self.audio_q.get(block=not no_wait)
         except:
             return
 
@@ -100,7 +100,7 @@ class _VoskT:
     def __init__(self):
         self.tiny_model_path = path.join(path.dirname(__file__), "vosk_models/vosk-model-small-en-us-0.15")
         self.small_model_path = path.join(path.dirname(__file__), "vosk_models/vosk-model-en-us-0.22-lgraph")
-        SetLogLevel(-1)                   # disables kaldi output messages
+        SetLogLevel(-1)                     # disables kaldi output messages
 
         # load model and recognizer
         model = Model(model_path=self.tiny_model_path, lang='en-us')
@@ -138,18 +138,17 @@ class VoiceToText:
     def start_listening(self):
         self.listener.start_stream()
 
-    def get_audio_phrase(self) -> bytes:
-        audio = self.listener.get_audio()
+    def get_audio_phrase(self, no_wait:bool=False) -> bytes:
+        audio = self.listener.get_audio(no_wait)
         return audio
 
-    def transcribe_audio(self, audio_data:bytes, vocabulary:str, full_vocab:bool=False) -> str:
+    def transcribe_audio(self, audio_data:bytes, vocabulary:str='') -> str:
         """
         `vocabulary` must be a single string, with the words separated by whitespace
         """
-        if full_vocab:
-            transcription = self.full_tran.transcribe(audio_data)
-        transcription = self.limited_tran.transcribe(audio_data, vocabulary)
-        return transcription
+        if vocabulary:
+            return self.limited_tran.transcribe(audio_data, vocabulary)
+        return self.full_tran.transcribe(audio_data)
 
     def stop_listening(self):
         self.listener.stop_stream()
