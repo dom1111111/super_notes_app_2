@@ -37,7 +37,7 @@ class TextAudioUI:
     _TUI_wrap = SharedResourceWrapper()
 
     def __init__(self):
-        self._vox_in = stt.VoiceToText()
+        self._vox_in = stt.PhraseDetector()
         self._vox_out = tts.ComputerVoice()
         self._audio_out = play_rec_audio.PlayAudio()
     
@@ -47,23 +47,17 @@ class TextAudioUI:
     @_vox_in_wrap
     def start_listening(self):
         """Start listening for voice phrases"""
-        self._vox_in.start_listening()
+        self._vox_in.start_stream()
     
     @_vox_in_wrap
     def stop_listening(self):
         """Stop listening for voice phrases"""
-        self._vox_in.stop_listening()
+        self._vox_in.stop_stream()
     
     def get_voice_audio(self, no_wait:bool=False) -> bytes:
         """Get earliest audio phrase data, which can then be transcribed to text via `transcribe_voice_audio()`.
         * This method is **blocking** unless `no_wait` arg is `True`"""
-        return self._vox_in.get_audio_phrase(no_wait)
-    
-    def transcribe_voice_audio(self, audio_data:bytes, vocabulary:str='') -> str:
-        """Transcribe phrase audio data (returned from `get_voice_audio()`) into text.
-        `vocabulary` must be a single string, with the words separated by whitespace.
-        If vocabulary is not provided, then the transcriber will use entire language vocabulary, which will typically take longer"""
-        return self._vox_in.transcribe_audio(audio_data, vocabulary)
+        return self._vox_in.get_audio(no_wait)
 
     #---------
     # voice-output methods
@@ -129,6 +123,15 @@ class TextAudioUI:
 #-------------------------------
 # Command convinience functions
 
+class Command:
+    def __init__(self, name:str, input_keywords:list, input_args:list, output:str, func, args:tuple=None):
+        self.name = name
+        self.input_kw = input_keywords
+        self.input_args = input_args
+        self.func = func
+        self.args = args
+        self.output = output
+
 def create_command_dict(name:str, input:list, func, args:tuple, output:str):
     """
     return a dictionary in the correct command format
@@ -161,117 +164,115 @@ def create_command_dict(name:str, input:list, func, args:tuple, output:str):
 #-------------------------------
 # Core helper classes
 
-#-------------------------------
-# App Core class
+class TextInputCommandProcessor:
+    def __init__(self, UI:TextAudioUI, commands:list):
+        pass
 
-# aka Input to Command Executer
-class AppCore:
-    def __init__(self):
-        self._active = False
-        self._UI = TextAudioUI()
-        self._commands = []                     # stores all commands
-        self._all_command_keywords = set()      # stores all command keywords - used for transcriber vocabulary
+"""
+def _ALT_voice_input_processor(self):
+    pass
+    # same as normal, but does full vocab transcription, so is much simpler, but slower
+"""
 
-        self._wake_words = "computer"
-        self._wake_timer = time_tools.Timer(5, self._wake_timer_func)
-        self._current_input = []                # stores all of the current input audio for a single cycle
-        self._current_command = None
+class VoiceInputCommandProcessor:
+    def __init__(self, commands:list, wake_timeout_func):
+        self._transcriber = stt.Transcriber()
+        self._commands = commands
+        self._all_command_keywords = self._generate_command_keywords()  # all command keywords - used for transcriber vocabulary
+
+        self._current_input_audio = []                                  # all of the current input audio for a single cycle
+        self._current_input_text = None                                 # the transcribed text of all input phrases in current_input
+        self._current_command = None                                    # the name of command whose keywords have been matched
+        
+        def timeout_func():                                             # the function the wake timer will call when the timer runs out
+            self._reset_current_cycle()
+            wake_timeout_func()
+        
+        self._wake_timer = time_tools.Timer(5, timeout_func)            # keeps track of wakfulness in real time
 
     def _generate_command_keywords(self):
         """generate the `all_command_keywords` set from the existing commands in the `commands`"""
         self._all_command_keywords = {keyword for command in self._commands for keyword in command['input']}  # nested set comprehension
         # MAKE THIS A DICT
 
-    def _add_current_input(self, time:datetime=datetime.now(), audio:bytes=None, text1:str=None, text2:str=None):
-        self._current_input.append(
-            {
-                'time':     time,
-                'audio':    audio,
-                'text1':    text1,
-                'text2':    text2
-            }
-        )
-
     def _reset_current_cycle(self):
-        self._current_input.clear()
+        #self._wake_timer.stop()
+        self._current_input_audio.clear()
+        self._current_input_text = None
         self._current_command = None
 
-    def _wake_timer_func(self):
-        self._reset_current_cycle()
-        self._UI.nl_print('---input listener timer ran out!---')
+    #---
 
-    #---------
-
-    # add this to command runner:
-    def command_action():
+    """
+    def _generate_command_action(self, command):
+        # add this to command runner:
         pass
         #result = command.func()
         #speak(message_pt1, result, message_pt2)
+    """
 
-    def _text_input_processor(self):
-        pass
+    #---------
 
-    def _ALT_voice_input_processor(self):
-        pass
-        # same as normal, but does full vocab trasncription, so is much simpler, but slower
-
-    def _voice_input_processor(self):
-        # [1] wait for input
-        input_audio = self._UI.get_voice_audio()        # this is blocking
-        input_time = datetime.now()
-
-        # [2] check if input is valid (has wakeword or is within wake timeout)
-        if self._wake_words in self._UI.transcribe_voice_audio(input_audio, self._wake_words):
-            self._current_input.clear()                 # if wakeword is said, reset current input,
-            self._current_command = None                # and reset current_command
+    def get_current_input_text(self) -> str:
+        return self._current_input_text
+    
+    def validiate_input(self, input_audio:bytes, wakewords:str):
+        """Check if input audio contains wakeword(s) or is within wake timeout.
+        Wakewords must be a single word or multiple seperated by whitespace"""
+        if self._transcriber.transcribe(input_audio, wakewords):
+            self._reset_current_cycle()
         elif self._wake_timer.is_active():
             pass
         else:
-            # send to any other possible command objects (if that's still a thing)
-            return
-        # vvv should eventually be a visual colour indication of wakefullness -> something lights up when awake, and stops when timer runs out
-        self._UI.nl_print('\n\n---waking!---')
+            return False
         # reset wake timer for every valid/waking phrase (iow: timer should only run out if no new phrases come in before the timeout)
         self._wake_timer.start()
-        
-        # [3] transcribe the valid input with all command keywords as vocabulary if no command has been found yet, 
-        # or the current_command's input requirements as vocabulary if it has.
-        # add input to current_input. if trasncription function doesn't return anything, then text value should be '_'
-        if not self._current_command:
-            input_text = self._UI.transcribe_voice_audio(input_audio, ' '.join(self._all_command_keywords))
-            self._add_current_input(input_time, input_audio, text1 = input_text if input_text else '_')
-        else:
-            input_text = None
-            self._add_current_input(input_time, input_audio, text2 = input_text if input_text else '_')
+        return True
+
+    def add_input_get_command(self, input_audio:bytes):
+        """Add input audio, and return a command if all currently added input meets the command's input requirements.
+        If the wakeword system is used, `input_audio` value should be validated (`validate_input`) before passing to this method"""     
+        # transcribe input
+        if not self._current_command:                           # use all command keywords as vocabulary if no command has been found yet
+            transcription = self._transcriber.transcribe(input_audio, ' '.join(self._all_command_keywords))
+        else:                                                   # use the current_command's input requirements as vocabulary if command has been found
+            transcription = self._transcriber.transcribe(input_audio, )
+        input_text = transcription if transcription else '_'    # if transcriber doesn't return anything, then text value should be '_'
+        self._current_input_audio.append(input_audio)           # add audio to current_input_audio
+        self._current_input_text += input_text + ', '           # add transcribed text followed by a comma to current_input_text
 
         
-        
 
-        # [3] transcribe each phrase in current_input depending on stage in input cycle
-        # (either looking for all commands by keyword, or looking at a single command)
-        for phrase in self._current_input:
-            # if the phrase has not yet been transcribed (within the corresponding text feild),
-            # and no command has been found yet, then transcribe it using all command keywords as vocabulary
-            if not self._current_command and not phrase['text1']:
-                
-                phrase['text1'] = input_text if input_text else '_'
-            # but if a command has been found, then trasncribe it using the current_command's input requirements as vocabulary
-            elif self._current_command and not phrase['text2']:
-                pass
-                input_text = None
-                phrase['text2'] = input_text if input_text else '_'
+        while True:
+            if not self._current_command:
+                # [4] check if the current input matches a command, or meets all of the current_command's requirements
+                for command in self._commands:
+                    def check(req):
+                        if isinstance(req, tuple) and any(word for word in req if word in self._current_input_text):
+                            return True
+                    if all(check(req) for req in command['input']):
+                        return command['name']
+                    
+        """
+                if a command is matched from all commands:
 
-# !!ISSUE!!: with this setup, if the code scans current input and finds a command, 
-# then until another new phrase comes in, it can't retrasncribe the existing phrases for current_command reqs!
+                    set current command
 
-        # [3] transcribe phrase input contains command keywords
-        
-        
-        
-        # vvv replace this eventually with the dynamic printing of the all curent input, updating the words with each new transcription
-        self._UI.nl_print(f'    [{input_time}] Voice: "{input_text}"')
-        
+                    check through all current input and transcribe (the for loop function, made up up of other smaller commands)
 
+                    continue! (> go back to start of loop to transcribe the phrases based on reqs)
+
+		        break
+
+            else (is current_command):
+
+                if command has all its reqs matched:
+
+                    return command['name']
+        """
+
+
+        
         # [4] see if current_input meets the input requirements of a command in the `commands` list
         """
         all_current_input_text = {text for input in self._current_input for text in input['text'].split()}
@@ -287,16 +288,6 @@ class AppCore:
         # > if you use the keyword dictionary, (rather than set), then you need one dictionary for synonyms (this will be the one used for transcription!)
         # which point to another dictionary's key (which is the keyword), whose value will contain the command!
 
-        """
-        for command_dict in input_command_reference:
-            # check the comand's condition
-            condition = command_dict.get('condition')
-            # if the condition passes, return the command
-            if condition:
-                print('got it!')
-                matched_command = command_dict
-                break
-        """
         # [5]
         # if a command is returned, then do it!
         """
@@ -309,22 +300,59 @@ class AppCore:
         """
 
 
+class CommandRunner:
+    def __init__(self, UI:TextAudioUI):
+        pass
+
+
+#-------------------------------
+# App Core class
+
+# aka Input to Command Executer
+class AppCore:
+    def __init__(self):
+        self._active = False
+        self._UI = TextAudioUI()
+        self._commands = []                     # stores all commands
+
+    def _generate_command_action(self, command):
+        # add this to command runner:
+        pass
+        #result = command.func()
+        #speak(message_pt1, result, message_pt2)
+
+    #---------
+
+    #---------
+
+    def _main_loop(self):
+
+        # object for voice processor
+        # object for command doer?
+
+        while self._active:
+            # [1] wait for input
+            input_audio = self._UI.get_voice_audio()        # this is blocking
+
+            # [2] validate input
+            if 
+            # vvv should eventually be a visual colour indication of wakefullness -> something lights up when awake, and stops when timer runs out
+            self._UI.nl_print('\n\n---waking!---')
+
     #---------
 
     def set_commands(self, commands:list|tuple):
         """set the app commands by supplying an itterable containing command dictionary objects"""
         # add all items from the `commands` argument to `self.commands` which are dictionaries
         self._commands = [c for c in commands if isinstance(c, dict)]
-        self._generate_command_keywords()                       # generate the command keywords dict
+        #self._generate_command_keywords()                       # generate the command keywords dict
 
     def run(self):
         self._UI.nl_print('loading...')
         self._active = True
         self._UI.start()                        # start UI
         self._UI.nl_print('starting!')
-        
-        while self._active:
-            self._voice_input_processor()
+        self._main_loop()
 
     def shutdown(self):
         self._UI.nl_print('shutting down...')
