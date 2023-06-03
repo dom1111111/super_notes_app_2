@@ -43,7 +43,10 @@ MATH_OPERATOR_WORDS = {
     'divided':  '/'
 }
 
-def words_to_number(text_num:str):
+def get_all_number_words() -> tuple:
+    return tuple(NUMBER_WORDS)
+
+def words_to_number(text_num:str) -> int:
     num_list = reversed([str(NUMBER_WORDS.get(word)) for word in text_num.split(' ')])
     num_list = [word for word in num_list if word != 'None']
     overall_num = None
@@ -73,7 +76,7 @@ def words_to_number(text_num:str):
                     overall_num = num + overall_num
         last_num = num
         
-    return overall_num
+    return int(overall_num)
 
 def calculate_from_words(s):
     pass

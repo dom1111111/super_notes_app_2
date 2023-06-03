@@ -6,6 +6,7 @@ from datetime import datetime
 from threading import Lock, Thread, Event
 from queue import Queue
 from functools import wraps
+from typing import Callable
 from UI_scripts import stt, tts, play_rec_audio, GUI_tk
 from external_scripts import number_tools, time_tools, word_tools
 
@@ -121,37 +122,90 @@ class TextAudioUI:
         self.shutup()
 
 #-------------------------------
-# Command convinience functions
+# Command class and methods
 
 class Command:
-    def __init__(self, name:str, input_keywords:list, input_args:list, output:str, func, args:tuple=None):
+    """
+    A class to create command objects
+
+    ---
+
+    ## Attributes
+    
+    `name`: str
+        A name to identify the command
+    
+    `input`: tuple   
+        A tuple containing a string for each input requirement.
+        **The first string item in the tuple is treated as the *command keyword(s)***, which is the first requirement that will be looked for.
+        
+        All requirements in the tuple must be strings, but certain ones will be treated differently depending on its value:
+        * '' - a single string with a word which must be met. ex: 'start'.
+        * 'ALL()' - represents multiple words or items (seperated by commas). all items inside the brackets must be met by the input.
+        * 'ANY()' - any (at least one) of the items inside the brackets must be met by input.
+        * 'NUMBER' - the same as a single string, but will be treated as an 'ANY()' with all number words ('one', 'twenty six', etc.).
+        * 'TIME' - same as 'NUMBER' but with the addition of time words ('minute', 'day', etc.).
+        * any of the above followed by '-> word1' will mean that if the requirement is met, its value will be 'word1'.
+        otherwise, the value will will be whatever value is already there. the only reason to use this is if the requirement is used.
+        * 'OPEN' - can be anything! basically an open ended message, rather than a specific limited requirement.
+        This will always be checked for last, after all other requirements have been found.
+
+        Also, any of these can be nested within each other.
+
+        ex: `All(word1, word2, ANY(word1, word2), TIME) -> start` - so this is a single requirement which is only considered met if 
+        input contains 'word1', 'word2', any of the words within the 'ANY()', and any time-related words
+        
+    `func`: Callable | str
+        An object which encapsulates the command's main functionality or logic. 
+        
+        Should usually be a function, but can also be string which maps to an internal app function that would otherwise be unreachable:
+        * 'SHUTDOWN': shuts down the app
+
+    `args`: tuple
+        The arguments which should be passed to the function.
+        These can be mapped to the value of an input requirement with a string of the index number of the requirement surrounded by sqaure brackets.
+        
+        ex: `([2], 'hello')` - in this case, there are 2 arguments which will passed to the function:
+        * the value of the third input requirement
+        * a string with the value 'hello'
+
+    `output`: str
+        A message to be returned after the func is called.
+        If 'FUNC' is within the string, then it will be replaced with the return value of func attribute.
+        Like with args, if an input requirement index (ex: [1]) is within the string, then it will replaced with its value
+    """
+    def __init__(self, name:str, input:tuple, func:Callable|str, args:tuple=(), output:str=''):
         self.name = name
-        self.input_kw = input_keywords
-        self.input_args = input_args
-        self.func = func
-        self.args = args
-        self.output = output
+        self.input = self._generate_input_objects(input)
+        self.action = self._generate_action(func, args, output)
+
+    def _get_special_str_value(special:str):
+        str_value_map = {
+            'NUMBER':   number_tools.get_all_number_words(),
+            'TIME':     ('days', 'hours', 'minutes', 'seconds') + number_tools.get_all_number_words(),
+        }
+
+    def _generate_input_objects(self, input:str):
+        pass
+
+    def _generate_action(self, func:Callable|str, args:tuple, output:str):
+        # set function
+        f = func
+        if isinstance(func, str):
+            str_func_map = {
+                'SHUTDOWN': function,
+            }
+            f = str_func_map.get(func)
+        # 
+
+    def get_input_keywords(self):
+        pass
+
+    def get_all_input_words(self):
+        pass
+
 
 def create_command_dict(name:str, input:list, func, args:tuple, output:str):
-    """
-    return a dictionary in the correct command format
-
-        `name`: a string of a name to identify the command
-        
-        `input`: a list containing strings of each command input component or requirement. 
-        Input requirements will be made up of both *keywords* and *arguments*.
-        Keywords are words used to identify commands 
-        Acceptable string values:
-                
-                - a single lowercase word = a core command keyword
-                - njj
-        
-        `func`: a function or callable object which will be run if all command requirements are met during an input cycle.
-        Is essentially the command's main action or logic.
-        Alternatively, `func` can be or a special all uppercase string which maps to an internal function.
-        
-            - 
-    """
     return {
         'name':     name,
         'input':    input,
@@ -159,7 +213,6 @@ def create_command_dict(name:str, input:list, func, args:tuple, output:str):
         'args':     args,
         'output':   output
     }
-
 
 #-------------------------------
 # Core helper classes
@@ -208,7 +261,7 @@ class VoiceInputCommandProcessor:
         # add this to command runner:
         pass
         #result = command.func()
-        #speak(message_pt1, result, message_pt2)
+        return (message_pt1, result, message_pt2)
     """
 
     #---------
@@ -216,7 +269,7 @@ class VoiceInputCommandProcessor:
     def get_current_input_text(self) -> str:
         return self._current_input_text
     
-    def validiate_input(self, input_audio:bytes, wakewords:str):
+    def validiate_input(self, input_audio:bytes, wakewords:str) -> bool:
         """Check if input audio contains wakeword(s) or is within wake timeout.
         Wakewords must be a single word or multiple seperated by whitespace"""
         if self._transcriber.transcribe(input_audio, wakewords):
@@ -229,30 +282,65 @@ class VoiceInputCommandProcessor:
         self._wake_timer.start()
         return True
 
-    def add_input_get_command(self, input_audio:bytes):
-        """Add input audio, and return a command if all currently added input meets the command's input requirements.
+    def transcribe_add_input(self, input_audio:bytes):
+        """transcribe input audio, and add it to `current_input_audio` and `current_input_text`.
         If the wakeword system is used, `input_audio` value should be validated (`validate_input`) before passing to this method"""     
         # transcribe input
         if not self._current_command:                           # use all command keywords as vocabulary if no command has been found yet
             transcription = self._transcriber.transcribe(input_audio, ' '.join(self._all_command_keywords))
         else:                                                   # use the current_command's input requirements as vocabulary if command has been found
+            # full vocab transcription should be used only if one of the args is open ended!
             transcription = self._transcriber.transcribe(input_audio, )
         input_text = transcription if transcription else '_'    # if transcriber doesn't return anything, then text value should be '_'
         self._current_input_audio.append(input_audio)           # add audio to current_input_audio
         self._current_input_text += input_text + ', '           # add transcribed text followed by a comma to current_input_text
 
-        
+    def check_for_command_keywords(self):
+        pass
 
-        while True:
-            if not self._current_command:
-                # [4] check if the current input matches a command, or meets all of the current_command's requirements
-                for command in self._commands:
-                    def check(req):
-                        if isinstance(req, tuple) and any(word for word in req if word in self._current_input_text):
-                            return True
-                    if all(check(req) for req in command['input']):
-                        return command['name']
-                    
+    # THIS IS THE MAIN METHOD FOR FINDING COMMAND FROM INPUT
+    # CAN BE USED WITH ANY VOICE OR TEXT PROCESSOR
+    def get_command_from_input(self, input_text:str):
+        """return a command's name if the input text meets all of its requirements.
+        `input_text` should be provided by `current_input_text`"""
+        for command in self._commands:
+
+    
+    
+    
+    
+    
+    
+    
+    while True:
+        # check if input contains all of the command's keywords
+        # keywords with multiple options (should be a tuple of strings) only need one of the words to be matched
+
+        # check if 
+        if not self._current_command:
+            # check if the current input matches a command, or meets all of the current_command's requirements
+            for command in self._commands:
+                def check(req):
+                    if isinstance(req, tuple) and any(word for word in req if word in self._current_input_text):
+                        return True
+                if all(check(req) for req in command['input']):
+                    return command['name']
+
+    # def add_input_get_command
+        # """Add input audio, and return a command if all currently added input meets the command's input requirements."""
+
+        # [4] see if current_input meets the input requirements of a command in the `commands` list
+        """
+        all_current_input_text = {text for input in self._current_input for text in input['text'].split()}
+        self._UI.nl_print(f'    all_current_input_text: "{all_current_input_text}"')
+        input_command_word_intersection = self._all_command_keywords.intersection(all_current_input_text)
+        self._UI.nl_print(f'    input_command_word_intersection: "{input_command_word_intersection}"')
+        """
+        all_current_input_text = ' '.join([input['text'] for input in self._current_input])
+        self._UI.nl_print(f'    all_current_input_text: "{all_current_input_text}"')
+        input_command_word_intersection = [word for word in self._all_command_keywords if word in all_current_input_text]
+        self._UI.nl_print(f'    input_command_word_intersection: "{input_command_word_intersection}"')
+             
         """
                 if a command is matched from all commands:
 
@@ -270,23 +358,6 @@ class VoiceInputCommandProcessor:
 
                     return command['name']
         """
-
-
-        
-        # [4] see if current_input meets the input requirements of a command in the `commands` list
-        """
-        all_current_input_text = {text for input in self._current_input for text in input['text'].split()}
-        self._UI.nl_print(f'    all_current_input_text: "{all_current_input_text}"')
-        input_command_word_intersection = self._all_command_keywords.intersection(all_current_input_text)
-        self._UI.nl_print(f'    input_command_word_intersection: "{input_command_word_intersection}"')
-        """
-        all_current_input_text = ' '.join([input['text'] for input in self._current_input])
-        self._UI.nl_print(f'    all_current_input_text: "{all_current_input_text}"')
-        input_command_word_intersection = [word for word in self._all_command_keywords if word in all_current_input_text]
-        self._UI.nl_print(f'    input_command_word_intersection: "{input_command_word_intersection}"')
-        
-        # > if you use the keyword dictionary, (rather than set), then you need one dictionary for synonyms (this will be the one used for transcription!)
-        # which point to another dictionary's key (which is the keyword), whose value will contain the command!
 
         # [5]
         # if a command is returned, then do it!
@@ -335,9 +406,15 @@ class AppCore:
             input_audio = self._UI.get_voice_audio()        # this is blocking
 
             # [2] validate input
-            if 
+            #if 
             # vvv should eventually be a visual colour indication of wakefullness -> something lights up when awake, and stops when timer runs out
             self._UI.nl_print('\n\n---waking!---')
+
+            # check if input has a command
+                # if yes, pass
+                # if not, continue
+            
+            # [3] run the command (in seperate thread)
 
     #---------
 
