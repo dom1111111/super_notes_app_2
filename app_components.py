@@ -140,31 +140,34 @@ class Command:
         A name to identify the command
     
     ### `input`: tuple   
-        A tuple containing a string for each input requirement.
+        A tuple containing each input requirement. All items within can either be a string, a list, or another tuple.
+        The items will be treated differently depending on their content:
+        
+        * a string of a single word - the input must contain this word
+        * a string with value 'NUMBER' - the input must contain any number words (ex: 'one', 'twenty six', etc.)
+        * a string with value 'TIME' - same as NUMBER, but with the addition of time words ('minute', 'day', etc.)
+        * a string with value 'OPEN' - can be anything! an open ended message, rather than a specific limited requirement. This will always be checked for last, after all other requirements have been found.
+        * a tuple - the input must contain ANY of the items within the tuple (the first item found in input will be used as this value)
+        * a list - the input must contain ALL of the items within the list
+        
+        ...
 
-        All requirements in the tuple must be strings, but certain ones will be treated differently depending on their value:
-        * '' - a single string with a word which must be met. ex: 'start'.
-        * 'KEY()' - the command keywords. Can hold a single or mutliple items. If multiple items, all must be met. **This should be the first requirement in the input tuple, and will be the first requirement that will be looked for**
-        * 'ALL()' - represents multiple words or items (seperated by commas). all items inside the brackets must be met by the input.
-        * 'ANY()' - any (at least one) of the items inside the brackets must be met by input.
-        * 'NUMBER' - the same as a single string, but will be treated as an 'ANY()' with all number words ('one', 'twenty six', etc.).
-        * 'TIME' - same as 'NUMBER' but with the addition of time words ('minute', 'day', etc.).
-        * any of the above followed by '-> word1' will mean that if the requirement is met, its value will be 'word1'.
-        otherwise, the value will will be whatever value is already there. the only reason to use this is if the requirement is used.
-        * 'OPEN' - can be anything! basically an open ended message, rather than a specific limited requirement.
-        This will always be checked for last, after all other requirements have been found.
+        - the items in tuples and lists can be any of the above, including more tuples and lists! So sub-requirements can be nested within requirements
+        - if a tuple or list has a *single-item set* within it, the item value will be used as the overall req value if the requirement is met by the input 
 
-        Also, any of these can be nested within each other.
+        ...
 
-        ex: `All(word1, word2, ANY(word1, word2), TIME) -> start` - so this is a single requirement which is only considered met if 
-        input contains 'word1', 'word2', any of the words within the 'ANY()', and any time-related words
-
-        another ex: `KEY()`
+        example: 
+        `['hello', 'cool', ('person', 'dog', 'cucumber'), 'TIME', {'greeting'}]` 
+        - so this requirement will only be considered met if the input contains:
+            'hello', 'cool', any of the words within the tuple ('person', 'dog', 'cucumber'), and any time words.
+        If all are present in input, then the value of this requirement will be the set item value: 'greeting'.
         
     ### `func`: Callable | str
         An object which encapsulates the command's main functionality or logic. 
         
         Should usually be a function, but can also be string which maps to an internal app function that would otherwise be unreachable:
+        
         * 'SHUTDOWN': shuts down the app
 
     ### `args`: tuple
@@ -180,103 +183,13 @@ class Command:
         If 'FUNC' is within the string, then it will be replaced with the return value of func attribute.
         Like with args, if an input requirement index (ex: [1]) is within the string, then it will replaced with its value
     """
+    
     def __init__(self, name:str, input:tuple, func:Callable|str, args:tuple=(), output:str=''):
         self.name = name
-        self.input = self._generate_input_objects(input)
-        self.action = self._generate_action(func, args, output)
-
-    def _generate_input_objects(self, input_reqs:tuple[str]):
-        """
-        All requirements in the tuple must be strings, but certain ones will be treated differently depending on their value:
-        * '' - a single string with a word which must be met. ex: 'start'.
-        * 'KEY()' - the command keywords. Can hold a single or mutliple items. If multiple items, all must be met. **This should be the first requirement in the input tuple, and will be the first requirement that will be looked for**
-        * 'ALL()' - represents multiple words or items (seperated by commas). all items inside the brackets must be met by the input.
-        * 'ANY()' - any (at least one) of the items inside the brackets must be met by input.
-        * 'NUMBER' - the same as a single string, but will be treated as an 'ANY()' with all number words ('one', 'twenty six', etc.).
-        * 'TIME' - same as 'NUMBER' but with the addition of time words ('minute', 'day', etc.).
-        * any of the above followed by '-> word1' will mean that if the requirement is met, its value will be 'word1'.
-        otherwise, the value will will be whatever value is already there. the only reason to use this is if the requirement is used.
-        * 'OPEN' - can be anything! basically an open ended message, rather than a specific limited requirement.
-        This will always be checked for last, after all other requirements have been found.
-        """
-
-        def get_req_input_value(input:str, req:str):
-            # 
-            def process_multi_reqs(req_type:str, mutli_reqs:str):
-                """this will process any input requirements which hold multiple items.
-                `req_type` must be the all-caps word at the start of the multi_req, before the parentheses. ex: 'ALL' or 'ANY'"""
-                value = []
-                mutli_reqs = mutli_reqs.strip(f'{req_type}()').split(', ')
-                for req in mutli_reqs:
-                    value.append(get_req_input_value(input, req))
-                return value
-
-            # see if overridden value is provided, and split that off from the req
-            if '->' in req:
-                parts = req.split('-> ')
-                req = parts[0]
-                o_value = parts[1]
-            else:
-                o_value = None
-
-            #
-            if req.startswith('KEY'):
-                value = process_multi_reqs('KEY', req)
-            elif req.startswith('ALL'):
-                pass
-            elif req.startswith('ANY'):
-                pass
-            elif req == 'NUMBER':
-                value = [x for x in input.split() if x in number_tools.get_all_number_words()]
-                value = 
-            elif req == 'TIME':
-                ('days', 'hours', 'minutes', 'seconds') + number_tools.get_all_number_words()
-            elif req == 'OPEN':
-                pass
-            else:
-                pass
-
-            return o_value if o_value else value
-
-
-        def translate_str_req(req:str):
-            if req.startswith('KEY'):
-                r = req.strip('KEY()').split(', ')
-                r = translate_str_req(r)
-            elif req.startswith('ALL'):
-                pass
-            elif req.startswith('ANY'):
-                pass
-            elif req == 'NUMBER':
-                number_tools.get_all_number_words()
-            elif req == 'TIME':
-                ('days', 'hours', 'minutes', 'seconds') + number_tools.get_all_number_words()
-            elif req == 'OPEN':
-                pass
-            else:
-                pass
-
-        for req in input_reqs:
-            translate_str_req(req)
-
-            
-
-    def _generate_action(self, func:Callable|str, args:tuple, output:str):
-        # set function
-        f = func
-        if isinstance(func, str):
-            str_func_map = {
-                'SHUTDOWN': function,
-            }
-            f = str_func_map.get(func)
-        # 
-        """
-        def _generate_command_action(self, command):
-            # add this to command runner:
-            pass
-            #result = command.func()
-            return (message_pt1, result, message_pt2)
-        """
+        self.input = input
+        self.func = func
+        self.args = args
+        self.output = output
 
     #---------
 
@@ -285,6 +198,114 @@ class Command:
 
     def get_all_input_words(self):
         pass
+
+#-------------------------------
+
+def get_command_action_from_input(user_input:str, command:Command):
+    """checks if user input meets a command's input requirements, 
+    and if it does, returns a corresponding action"""
+
+    user_input = user_input.split()                                 # turn input string into list
+    
+    def get_req_value(req:str|tuple):
+        # All requirements have a type, content/condition, and value.
+        # The type determines how the content/condition should be tested, 
+        # and the value is a result of the condition being met or not.
+
+        def get_data_from_req(req:str|tuple|list):
+            # if the req is itterable, check if contains a *single item set*
+            # if it does, this should be the value - and also must remove the item from the itterable
+            try:
+                v = [i for i in req if isinstance(i, set) and len(i)==1]    # create list made up of only one-item sets
+                i = req.index(v[0])                                         # get index of the set
+                cont = req[:i] + req[i+1:]                                  # remove the set from the itterable req
+                v = v[0].pop()                                              # isolate the value within the set
+            except:
+                cont = req
+                v = None
+            # determine the requirement type by its value or data-type
+            if req == 'NUMBER' or req == 'TIME' or req == 'OPEN':   # single string, special value type
+                return req, None, None
+            elif isinstance(req, tuple):                            # tuples represent ANY type
+                return 'ANY', cont, v
+            elif isinstance(req, list):                             # lists represent ALL type
+                return 'ALL', cont, v
+            else:                                                   # single string type
+                return 'STR', cont, v
+
+        r_type, r_content, r_value = get_data_from_req(req)
+
+        value = None
+
+        if r_type == 'STR':
+            value = r_content if r_content in user_input else None
+        elif r_type == 'NUMBER':
+            pass
+            #value = [x for x in user_input.split() if x in number_tools.get_all_number_words()]
+            #value = pass
+            # TRANSLATE INPUT TO NUMBERS FIRST!
+        elif r_type == 'TIME':
+            pass
+            #('day', 'days', 'hour', 'hours', 'minute', 'minutes', 'second', 'seconds') + number_tools.get_all_number_words()
+        elif r_type == 'OPEN':
+            pass
+        elif r_type == 'ANY':
+            for sub_req in r_content:
+                sub_val = get_req_value(sub_req)
+                if sub_val:
+                    value = sub_val
+                    break
+        elif r_type == 'ALL':
+            value = True
+            for sub_req in r_content:
+                if not get_req_value(sub_req):
+                    value = None
+                    break
+
+        value = r_value if r_value and value else value
+        return value
+
+    #------
+
+    input_req_values = []
+    
+    for req in command.input:
+        input_req_values.append(get_req_value(req))
+
+    # IF THERE'S AN OPEN REQ, THEN ISOLATE ALL THE OTHER FOUND REQS FROM STRING, AND WHATEVER'S LEFT, WILL BE THE OPEN VALUE!
+
+        """
+        def _generate_action(self, func:Callable|str, args:tuple, output:str):
+            # set function
+            f = func
+            if isinstance(func, str):
+                str_func_map = {
+                    'SHUTDOWN': function,
+                }
+                f = str_func_map.get(func)
+            # 
+            
+            ###
+            def _generate_command_action(self, command):
+                # add this to command runner:
+                pass
+                #result = command.func()
+                return (message_pt1, result, message_pt2)
+            ###
+        """
+
+    if all(input_req_values):
+        return 'action!'
+        # generate action and return it!
+
+
+
+def get_command_from_input(user_input:str, commands:list[Command]):
+    for command in commands:
+        action = get_command_action_from_input(user_input, command)
+        if action:
+            return action
+
 
 #-------------------------------
 
