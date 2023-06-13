@@ -110,7 +110,7 @@ class PhraseDetector:
         self._rec.set_callback(callback_detect_phrase)      # set recording callback to `callback_detect_phrase` function
         
         SAMPLE_RATE = 16000
-        self.rec.set_pars(                                  # set the recording audio parameters
+        self._rec.set_pars(                                 # set the recording audio parameters
             chunk_size = round(SAMPLE_RATE/self._chunks_per_second),
             n_channels = 1,
             rate = SAMPLE_RATE
