@@ -23,7 +23,6 @@ KEYWORDS = {                # even single word combos MUST be tuples - don't fog
 }
 
 NUMBER_WORD_MAP = {
-    'oh':        0,
     'zero':      0,
     'one':       1,
     'two':       2,
@@ -61,7 +60,7 @@ NUMBER_WORD_MAP = {
     'trillion':  1000000000000,
 }
 
-NUMBER_WORDS = tuple(NUMBER_WORD_MAP)
+NUMBER_WORDS = tuple(NUMBER_WORD_MAP) + ('oh', 'point')
 
 MATH_OPERATOR_WORD_MAP = {
     'plus':     '+',
@@ -101,58 +100,58 @@ def match_keywords(keyword_keys:tuple, text:str):
 #------------------------
 # Number and math word functions
 
-def words_to_integer(text_num:str) -> int:
-    num_list = reversed([str(NUMBER_WORD_MAP.get(word)) for word in text_num.split(' ')])
-    num_list = [word for word in num_list if word != 'None']
-    overall_num = None
-    last_num = None
-    for num in num_list:
-        if overall_num == None:
-            overall_num = num
-        # if this number is longer than overall: add both together as ints
-        # unless overall is a zero, in which case: concatenate this number to the left of overall
-        elif len(num) > len(overall_num):
-            if int(overall_num) == 0:
-                overall_num = num + overall_num
-            else:
-                overall_num = str(int(overall_num) + int(num))
-        # if this number is the same lenth or shorter than overall:
-        elif len(num) <= len(overall_num):
-            # if last number is a grand starting with one, replace leading digit ('1') of overall with this number
-            if len(last_num) >= 3:
-                overall_num = num + overall_num.replace('1', '', 1)
-            # if last number same is a single or double, concatenate this number to left of overall
-            # minus the length of last number from the right, but only if this number is a tens or grand and the last number was smaller than this one
-            else:
-                last_len = len(last_num)
-                if int(num) >= 20 and len(num) > last_len: 
-                    overall_num = num[:-last_len] + overall_num
-                else:
-                    overall_num = num + overall_num
-        last_num = num
-        
-    return int(overall_num)
-
-def words_to_number(text_num:str) -> int|float:
+def words_to_number(num_words:str) -> int|float:
     """convert number words to a matching float or integer"""
-    if 'point' in text_num:
+
+    def words_to_int_str(text_num:str) -> str:
+        num_list = reversed([str(NUMBER_WORD_MAP.get(word)) for word in text_num.split()])
+        num_list = [word for word in num_list if word != 'None']
+        overall_num = None
+        last_num = None
+        for num in num_list:
+            if overall_num == None:
+                overall_num = num
+            # if this number is longer than overall: add both together as ints
+            # unless overall is a zero, in which case: concatenate this number to the left of overall
+            elif len(num) > len(overall_num):
+                if int(overall_num) == 0:
+                    overall_num = num + overall_num
+                else:
+                    overall_num = str(int(overall_num) + int(num))
+            # if this number is the same lenth or shorter than overall:
+            elif len(num) <= len(overall_num):
+                # if last number is a grand starting with one, replace leading digit ('1') of overall with this number
+                if len(last_num) >= 3:
+                    overall_num = num + overall_num.replace('1', '', 1)
+                # if last number same is a single or double, concatenate this number to left of overall
+                # minus the length of last number from the right, but only if this number is a tens or grand and the last number was smaller than this one
+                else:
+                    last_len = len(last_num)
+                    if int(num) >= 20 and len(num) > last_len: 
+                        overall_num = num[:-last_len] + overall_num
+                    else:
+                        overall_num = num + overall_num
+            last_num = num
+            
+        return overall_num
+
+    #------
+    
+    if 'point' in num_words:
         overall_num = ''
-        nums = text_num.split('point')
+        nums = num_words.split('point')
         for n in nums:
-            overall_num += str(words_to_integer(n)) + '.'
+            overall_num += words_to_int_str(n) + '.'
         if overall_num:
             return float(overall_num[:-1])                  # the indexing removes the last added period
     else:
-        return words_to_integer(text_num)
+        return int(words_to_int_str(num_words))
 
 #------------------------
 # Sentence/message processing
 
 def get_words_only(message:str) -> list:
     """returns a list containing only the words within a message, and excludes any other characters (like punctuation)"""
-
-    words_only = []                 # holds the words and converterted number words without punctuation
-    current_number_words = []       # temporary number words to be processed into numbers
 
     def remove_punctuation(word:str) -> str:
         """remove all non-alpha-numeric characters from the beginning and end of a word"""
@@ -167,48 +166,50 @@ def get_words_only(message:str) -> list:
             break
         return word
 
-    #---
+    message_split = [remove_punctuation(w).lower() for w in message.split()]    # remove the punctuation and make all letter characters lowercase
 
-    # rules for non-number word number processing:
-    # - if there is "point" in between 2 numbers, then combine them as a decimal (and also not seperated by sentence ending punctuation)
-    # - if there is 'and' after the word 'hundred' but before other numbers, then combine the two numbers
-    # - if there is "oh" next to any number word (but not if any punctuation is between them!), add that to numbers
+    words_only = []                             # holds the words and converterted number words without punctuation
+    current_number_words = []                   # temporary number words to be processed into numbers
 
-    for og_word in message.split():
+    def convert_cur_num_words():
+        # if current_number_words has only one item, treat it as a regular word without converting it to a number, and add it to words_only
+        if len(current_number_words) == 1:
+            words_only.append(current_number_words.pop())
+        # if current_number_words has multiple items, then convert them into a number, and add them to words_only
+        elif len(current_number_words) > 1:
+            words_only.append(words_to_number(' '.join(current_number_words)))
+            current_number_words.clear()        # reset current_number_words to keep this as a single seperate number
 
-        word = remove_punctuation(og_word).lower()      # remove the punctuation and make all letter characters lowercase
-
-        if word in NUMBER_WORDS:
-            current_number_words.append(word)
+    def is_next_word_num(index:int) -> bool:
+        """determine if the next item in message_split is a number word"""
+        try:
+            return message_split[i+1] in NUMBER_WORDS
+        except:
+            return
         
-        # if the word is 'point' and there is currently number being process, add it to current_number_words
-        elif word == 'point' and current_number_words:
-            current_number_words.append(word)
-        # undo the above action if this word is not a number word
-        elif (current_number_words and current_number_words[-1] == 'point') and (word not in NUMBER_WORDS): 
-            words_only.append(current_number_words.pop())
+    #------
+    # main loop
+
+    for i, word in enumerate(message_split):
+        # if the word is 'and' and it's in between 2 number words, with the previous word being anything higher than a tens, then treat it as part of the current number
+        if word == 'and' and ((current_number_words and (NUMBER_WORD_MAP.get(current_number_words[-1]) >= 100)) and is_next_word_num(i)):
+            pass                                # no need to add anything!
+        # if the word is not any sort of number word, append it to words_only
+        elif not word in NUMBER_WORDS:
+            convert_cur_num_words()             # first check if there's number words to convert 
             words_only.append(word)
-
-        # if the word is 'and' and the last word in current_number_words is a hundred or higher, add it to current_number_words
-        elif word == 'and' and current_number_words[-1] in NUMBER_WORDS[-5:]:
-            current_number_words.append(word)
-        # undo the above action if this word is not a number word
-        elif (current_number_words and current_number_words[-1] == 'and') and (word not in NUMBER_WORDS): 
-            words_only.append(current_number_words.pop())
-            words_only.append(word)
-
-        #elif word == 'oh':
-        #    pass
-
-        # otherwise if the word is not any of the above, append it to words_only
-        # but also, first check if current_number_words has any items, and process them into a number, and add them to words_only
+        # if the word IS a number word
         else:
-            if len(current_number_words) > 1:
-                words_only.append(words_to_number(' '.join(current_number_words)))
-                current_number_words.clear()
-            elif len(current_number_words) == 1:
-                words_only.append(current_number_words.pop())
-           
-            words_only.append(word)
+            # if the word is a number word (but not 'oh', 'point'), add it to current_number_words
+            if word not in ('oh', 'point'):
+                current_number_words.append(word)
+            # if the word is 'point' and it's in between 2 number words, then treat it as part of the current number (will become a decimal)
+            elif word == 'point' and (current_number_words and is_next_word_num(i)):
+                current_number_words.append(word)
+            # if there is "oh" next to any number word, then treat it as part of the current number as a zero
+            elif word == 'oh' and (current_number_words or is_next_word_num(i)):
+                current_number_words.append('zero')               
+
+    convert_cur_num_words()                     # check if there's still number words to convert 
 
     return words_only
