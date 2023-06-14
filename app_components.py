@@ -192,10 +192,10 @@ class Command:
         self.args = args
         self.output = output
 
-        self.input_keyword_vocab, self.input_all_vocab = self._get_input_req_words()
+        self.input_keyword_vocab, self.input_all_vocab = self._get_input_req_words(self.input)
 
     @staticmethod
-    def _get_input_req_words(input_reqs:tuple) -> str:
+    def _get_input_req_words(input_reqs:tuple) -> set:
         """get both the input requirement keywords, and all the rest of the words, to use for transcriber vocabulary"""
         keywords = []
         words = []
@@ -225,8 +225,115 @@ class Command:
 
         # remove duplicate words (by turning into set)
         return set(keywords), set(words)   
-        
+    
+    @staticmethod
+    def _get_req_value(req:str|tuple, user_inpt:str):
+        # All requirements have a type, content/condition, and value.
+        # The type determines how the content/condition should be tested, 
+        # and the value is a result of the condition being met or not.
 
+        def get_data_from_req(req:str|tuple|list):
+            # if the req is itterable, check if contains a *single item set*
+            # if it does, this should be the value - and also must remove the item from the itterable
+            try:
+                v = [i for i in req if isinstance(i, set) and len(i)==1]    # create list made up of only one-item sets
+                i = req.index(v[0])                                         # get index of the set
+                cont = req[:i] + req[i+1:]                                  # remove the set from the itterable req
+                v = v[0].pop()                                              # isolate the value within the set
+            except:
+                cont = req
+                v = None
+            # determine the requirement type by its value or data-type
+            if req == 'NUMBER' or req == 'TIME' or req == 'OPEN':   # single string, special value type
+                return req, None, None
+            elif isinstance(req, tuple):                            # tuples represent ANY type
+                return 'ANY', cont, v
+            elif isinstance(req, list):                             # lists represent ALL type
+                return 'ALL', cont, v
+            else:                                                   # single string type
+                return 'STR', cont, v
+
+        r_type, r_content, r_value = get_data_from_req(req)
+
+        value = None
+
+        if r_type == 'STR':
+            value = r_content if r_content in user_input else None
+        elif r_type == 'NUMBER':
+            pass
+            #value = [x for x in user_input.split() if x in number_tools.get_all_number_words()]
+            #value = pass
+            # TRANSLATE INPUT TO NUMBERS FIRST!
+        elif r_type == 'TIME':
+            pass
+            #('day', 'days', 'hour', 'hours', 'minute', 'minutes', 'second', 'seconds') + number_tools.get_all_number_words()
+        elif r_type == 'OPEN':
+            pass
+        elif r_type == 'ANY':
+            for sub_req in r_content:
+                sub_val = _get_req_value(sub_req)
+                if sub_val:
+                    value = sub_val
+                    break
+        elif r_type == 'ALL':
+            value = True
+            for sub_req in r_content:
+                if not _get_req_value(sub_req):
+                    value = None
+                    break
+
+        value = r_value if r_value and value else value
+        return value
+
+    #------
+
+    def get_keyword_req_values(self, user_input:str) -> tuple: # or bool?
+        """checks if user input meets the command's keyword input requirements"""
+        pass
+
+    def get_all_req_values(self, user_input:str) -> tuple:
+        """checks if user input meets all of the command's input requirements, and if it does, returns a corresponding action"""
+
+        user_input = _prep_input(user_input)
+
+        input_req_values = []
+        
+        for req in command.input:
+            input_req_values.append(_get_req_value(req))
+
+        # IF THERE'S AN OPEN REQ, THEN ISOLATE ALL THE OTHER FOUND REQS FROM STRING, AND WHATEVER'S LEFT, WILL BE THE OPEN VALUE!
+
+        # >>> CONSIDER MOVING THIS PART OUT OF METHOD, AS IT DOESN'T QUITE
+        if all(input_req_values):
+            return 'action!'
+            # generate action and return it!
+
+    def generate_command_action(self, input_req_values:tuple):
+        """generates and returns a command action from the provided input-requirement-values"""
+        # add this to command runner:
+        pass
+        #result = command.func()
+        #speak(message_pt1, result, message_pt2)
+
+        """
+        def _generate_action(self, func:Callable|str, args:tuple, output:str):
+            # set function
+            f = func
+            if isinstance(func, str):
+                str_func_map = {
+                    'SHUTDOWN': function,
+                }
+                f = str_func_map.get(func)
+            # 
+            
+            ###
+            def _generate_command_action(self, command):
+                # add this to command runner:
+                pass
+                #result = command.func()
+                return (message_pt1, result, message_pt2)
+            ###
+        """
             
         
 
@@ -236,113 +343,6 @@ class CommandAction:
         pass
 
 
-#------
-
-def _get_req_value(req:str|tuple):
-    # All requirements have a type, content/condition, and value.
-    # The type determines how the content/condition should be tested, 
-    # and the value is a result of the condition being met or not.
-
-    def get_data_from_req(req:str|tuple|list):
-        # if the req is itterable, check if contains a *single item set*
-        # if it does, this should be the value - and also must remove the item from the itterable
-        try:
-            v = [i for i in req if isinstance(i, set) and len(i)==1]    # create list made up of only one-item sets
-            i = req.index(v[0])                                         # get index of the set
-            cont = req[:i] + req[i+1:]                                  # remove the set from the itterable req
-            v = v[0].pop()                                              # isolate the value within the set
-        except:
-            cont = req
-            v = None
-        # determine the requirement type by its value or data-type
-        if req == 'NUMBER' or req == 'TIME' or req == 'OPEN':   # single string, special value type
-            return req, None, None
-        elif isinstance(req, tuple):                            # tuples represent ANY type
-            return 'ANY', cont, v
-        elif isinstance(req, list):                             # lists represent ALL type
-            return 'ALL', cont, v
-        else:                                                   # single string type
-            return 'STR', cont, v
-
-    r_type, r_content, r_value = get_data_from_req(req)
-
-    value = None
-
-    if r_type == 'STR':
-        value = r_content if r_content in user_input else None
-    elif r_type == 'NUMBER':
-        pass
-        #value = [x for x in user_input.split() if x in number_tools.get_all_number_words()]
-        #value = pass
-        # TRANSLATE INPUT TO NUMBERS FIRST!
-    elif r_type == 'TIME':
-        pass
-        #('day', 'days', 'hour', 'hours', 'minute', 'minutes', 'second', 'seconds') + number_tools.get_all_number_words()
-    elif r_type == 'OPEN':
-        pass
-    elif r_type == 'ANY':
-        for sub_req in r_content:
-            sub_val = _get_req_value(sub_req)
-            if sub_val:
-                value = sub_val
-                break
-    elif r_type == 'ALL':
-        value = True
-        for sub_req in r_content:
-            if not _get_req_value(sub_req):
-                value = None
-                break
-
-    value = r_value if r_value and value else value
-    return value
-
-
-def get_command_keyword_req_values_from_input(user_input:str, command:Command):
-    pass
-
-def get_command_req_values_from_input(user_input:str, command:Command):
-    """checks if user input meets a command's input requirements, 
-    and if it does, returns a corresponding action"""
-
-    user_input = _prep_input(user_input)
-
-    input_req_values = []
-    
-    for req in command.input:
-        input_req_values.append(_get_req_value(req))
-
-    # IF THERE'S AN OPEN REQ, THEN ISOLATE ALL THE OTHER FOUND REQS FROM STRING, AND WHATEVER'S LEFT, WILL BE THE OPEN VALUE!
-
-    if all(input_req_values):
-        return 'action!'
-        # generate action and return it!
-
-def generate_command_action(command:Command, input_req_values:tuple):
-    # add this to command runner:
-    pass
-    #result = command.func()
-    #speak(message_pt1, result, message_pt2)
-
-    """
-    def _generate_action(self, func:Callable|str, args:tuple, output:str):
-        # set function
-        f = func
-        if isinstance(func, str):
-            str_func_map = {
-                'SHUTDOWN': function,
-            }
-            f = str_func_map.get(func)
-        # 
-        
-        ###
-        def _generate_command_action(self, command):
-            # add this to command runner:
-            pass
-            #result = command.func()
-            return (message_pt1, result, message_pt2)
-        ###
-    """
-
 #-------------------------------
 # Core helper classes
 
@@ -350,11 +350,6 @@ class CommandActionRunner:
     def __init__(self, UI:TextAudioUI):
         pass
 
-"""
-class _ALT_voice_input_processor(self):
-    pass
-    # same as normal, but does full vocab transcription, so is much simpler, but slower
-"""  
 
 class VoiceInputCommandProcessor:
     def __init__(self, UI:TextAudioUI, commands:list[Command], wakewords:str):

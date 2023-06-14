@@ -150,7 +150,7 @@ def words_to_number(num_words:str) -> int|float:
 #------------------------
 # Sentence/message processing
 
-def get_words_only(message:str) -> list:
+def get_words_only(message:str) -> list[str|int|float]:
     """returns a list containing only the words within a message, and excludes any other characters (like punctuation)"""
 
     def remove_punctuation(word:str) -> str:
