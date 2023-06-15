@@ -148,13 +148,12 @@ class Command:
         * a string with value 'NUMBER' - the input must contain any number words (ex: 'one', 'twenty six', etc.)
         * a string with value 'TIME' - same as NUMBER, but with the addition of time words ('minute', 'day', etc.)
         * a string with value 'OPEN' - can be anything! an open ended message, rather than a specific limited requirement. This will always be checked for last, after all other requirements have been found.
+        * ...
         * a tuple - the input must contain ANY of the items within the tuple (the first item found in input will be used as this value)
         * a list - the input must contain ALL of the items within the list
-        
-        ...
-
-        - the items in tuples and lists can be any of the above, including more tuples and lists! So sub-requirements can be nested within requirements
-        - if a tuple or list has a *single-item set* within it, the item value will be used as the overall req value if the requirement is met by the input
+            - the items in tuples and lists can be any of the above (including more tuples and lists), **except** an OPEN!
+                - So sub-requirements can be nested within requirements
+            - if a tuple or list has a *single-item set* within it, the item value will be used as the overall req value if the requirement is met by the input
         
         ...
 
@@ -206,13 +205,11 @@ class Command:
                     words.extend(word_tools.NUMBER_WORDS)
                 elif req == 'TIME':
                     words.extend(word_tools.TIME_WORDS + word_tools.NUMBER_WORDS)
-                    # get time vocab
                 elif req == 'OPEN':
                     pass
                 else:
                     words.append(req)
-            elif isinstance(req, tuple) or isinstance(req, list):
-                # should only be tuple or list. sets should be ignored
+            elif isinstance(req, tuple) or isinstance(req, list):   # should only be tuple or list. sets should be ignored
                 for r in req:
                     add_words_from_req(r)
 
@@ -254,33 +251,30 @@ class Command:
         return tuple(get_req_data(r) for r in input_reqs) 
 
     @staticmethod
-    def _get_input_req_value(req:tuple, user_input:list[str|int|float]):
-        """Get the value of a single input requirement based on a list of user input content items.
-        A requirement must be a tuple with 3 items, in order: (type, content, value)"""
-        r_type, r_content, r_value = req
+    def _get_input_req_value(req_type:str, req_content:str|tuple|list, user_input:list[str|int|float]):
+        """Get the initial value of a single input requirement based its type and content, and on a list of user input items"""
         value = None
 
-        if r_type == 'STR':
-            value = r_content if r_content in user_input else None
-        elif r_type == 'NUMBER':
-            value = tuple(x for x in user_input if (isinstance(x, int) or isinstance(x, float)))
-        elif r_type == 'TIME':
-            pass
-            #('day', 'days', 'hour', 'hours', 'minute', 'minutes', 'second', 'seconds') + number_tools.get_all_number_words()
-        elif r_type == 'OPEN':
-            value = 'OPEN'              # this will be processed outside of this method, so just have 'OPEN' as value
-        elif r_type == 'ANY':
-            for sub_req in r_content:
-                sub_val = Command._get_input_req_value(sub_req, user_input)
-                if sub_val:
-                    value = sub_val
-                    break
-        elif r_type == 'ALL':
-            value = True
-            for sub_req in r_content:
-                if not Command._get_input_req_value(sub_req, user_input):
-                    value = None
-                    break
+        def get_sub_values(r_content:tuple) -> tuple:
+            # sub_req[0] and sub_req[1] is type and content respectively
+            return tuple(Command._get_input_req_value(sub_req[0], sub_req[1], user_input) for sub_req in r_content)
+
+        if req_type == 'STR':
+            value = req_content if req_content in user_input else None
+        elif req_type == 'NUMBER':
+            nums = tuple(x for x in user_input if (isinstance(x, int) or isinstance(x, float)))
+            value = nums[0] if nums else None       # only return the first instance of a number
+        elif req_type == 'TIME':
+            times = tuple(x for x in user_input if isinstance(x, ,,,))
+            value = times[0] if times else None     # only return the first instance of a time
+        elif req_type == 'OPEN':
+            value = 'OPEN'                          # this will be processed outside of this method, so just have 'OPEN' as value
+        elif req_type == 'ANY':
+            sub_vals = get_sub_values(req_content)
+            value = sub_vals[0] if any(sub_vals) else None
+        elif req_type == 'ALL':
+            sub_vals = get_sub_values(req_content)
+            value = sub_vals if all(sub_vals) else None
 
         return value
 
@@ -288,79 +282,48 @@ class Command:
 
     def get_keyword_req_value(self, user_input:str) -> tuple:
         """returns a tuple of values for command's keyword input requirement, based on user input"""
-        usr_ipt_items = word_tools.get_words_only(user_input)               # get a list with all words or numbers in user input
-        return self._get_input_req_value(self.input[0], usr_ipt_items)      # keyword req is first item 
+        usr_ipt_items = word_tools.get_words_only(user_input)                   # get a list with all words or numbers in user input
+        return self._get_input_req_value(self.input[0], usr_ipt_items)          # keyword req is first item 
 
-    def get_all_req_values(self, user_input:str) -> tuple:
+    def get_all_req_values(self, user_input:str) -> list:
         """returns a tuple of values for all command's input requirements, based on user input"""
-        usr_ipt_items = word_tools.get_words_only(user_input)               # get a list with all words or numbers in user input
-        req_values = [self._get_input_req_value(req, usr_ipt_items) for req in self.input]
+        usr_ipt_items = word_tools.get_words_only(user_input)                   # get a list with all words or numbers in user input
+        req_values = []
+
+        for req in self.input:
+            value = self._get_input_req_value(req[0], req[1], usr_ipt_items)
+            # sub_req[0] and sub_req[1] is type and content respectively
+            if value:
+                if req[0] in ('STR', 'NUMBER', 'TIME', 'OPEN', 'ANY'):
+                    usr_ipt_items.remove(value)
+                elif req[0] == 'ALL':
+                    for sub_val in value:
+                        usr_ipt_items.remove(sub_val)
+                
+                # ADD THIS: value = r_value if r_value and value else value
+                """
+                for i, req in enumerate(self.input):
+                    # if an value was specified in input, then override it
+                    if req[2]:
+                        req_values[i] = req[2]
+                """
+            req_values.append(value)
 
         # IF THERE'S AN OPEN REQ, THEN ISOLATE ALL THE OTHER FOUND REQS FROM STRING, AND WHATEVER'S LEFT, WILL BE THE OPEN VALUE!
+        # ONLY DO IF ALL OTHER REQS ARE MET
         if 'OPEN' in req_values:
             pass
 
-        for i, req in enumerate(self.input):
-            # if an value was specified in input, then override it
-            if req[2]:
-                req_values[i] = req[2]
 
         return req_values
 
-        
+    # > have it so that each requirement is processed in order, and it REMOVES the input items which met the req
+    # (this makes it easy for the OPEN req parsing to work)
 
-##################################
-#########---ALTERNATE---#########
-
-# > have it so that each requirement is processed in order, and it REMOVES the input items which met the req
-# (this makes it easy for the OPEN req parsing to work)
-
-# > this returns all req values -> maybe add option to only do keywords - but don't do seperate function
-# otherwise _get_input_req_value still needs to be outside -> in which case it needs to ALWAYS return the matched words as values, 
-# and keep any other overidden value as an entire seperate thing.
-# then, this would use a while loop, rather than list comprehension or for loop, and the input list will be modified as it goes
-
-    """
-    def get_req_values(self, user_input:str) -> tuple:
-        usr_ipt_items = word_tools.get_words_only(user_input)
-
-
-    @staticmethod
-    def _get_input_req_value(req:tuple, user_input:list[str|int|float]):
-        ""Get the value of a single input requirement based on a list of user input content items.
-        A requirement must be a tuple with 3 items, in order: (type, content, value)""
-        r_type, r_content, r_value = req
-        value = None
-
-        if r_type == 'STR':
-            value = r_content if r_content in user_input else None
-        elif r_type == 'NUMBER':
-            value = (x for x in user_input if (isinstance(x, int) or isinstance(x, float)))
-        elif r_type == 'TIME':
-            pass
-            #('day', 'days', 'hour', 'hours', 'minute', 'minutes', 'second', 'seconds') + number_tools.get_all_number_words()
-        elif r_type == 'OPEN':
-            value = 'OPEN'              # this will be processed outside of this method, so just have 'OPEN' as value
-        elif r_type == 'ANY':
-            for sub_req in r_content:
-                sub_val = Command._get_input_req_value(sub_req, user_input)
-                if sub_val:
-                    value = sub_val
-                    break
-        elif r_type == 'ALL':
-            value = True
-            for sub_req in r_content:
-                if not Command._get_input_req_value(sub_req, user_input):
-                    value = None
-                    break
-
-        return value
-    """
-##################################
-##################################
-
-    """value = r_value if r_value and value else value"""
-
+    # > this returns all req values -> maybe add option to only do keywords - but don't do seperate function
+    # otherwise _get_input_req_value still needs to be outside -> in which case it needs to ALWAYS return the matched words as values, 
+    # and keep any other overidden value as an entire seperate thing.
+    # then, this would use a while loop, rather than list comprehension or for loop, and the input list will be modified as it goes
 
 
     def generate_command_action(self, input_req_values:tuple):
