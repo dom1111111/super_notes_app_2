@@ -69,6 +69,9 @@ MATH_OPERATOR_WORD_MAP = {
     'divided':  '/'
 }
 
+_time_words = ('year', 'month', 'week', 'day', 'hour', 'minute', 'second')
+TIME_WORDS = _time_words + tuple(w + 's' for w in _time_words)
+
 #------------------------
 # Word functions
 
@@ -172,11 +175,8 @@ def get_words_only(message:str) -> list[str|int|float]:
     current_number_words = []                   # temporary number words to be processed into numbers
 
     def convert_cur_num_words():
-        # if current_number_words has only one item, treat it as a regular word without converting it to a number, and add it to words_only
-        if len(current_number_words) == 1:
-            words_only.append(current_number_words.pop())
-        # if current_number_words has multiple items, then convert them into a number, and add them to words_only
-        elif len(current_number_words) > 1:
+        # if current_number_words has any items, then convert them into a number, and add them to words_only
+        if current_number_words:
             words_only.append(words_to_number(' '.join(current_number_words)))
             current_number_words.clear()        # reset current_number_words to keep this as a single seperate number
 
