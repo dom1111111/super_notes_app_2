@@ -254,6 +254,7 @@ class Command:
     # methods for checking user input against input requirements
 
     @staticmethod
+    # this is used solely for get_req_value methods below
     def _get_input_req_value(req_type:str, req_content:str|tuple|list, u_in_items:list[str|int|float]):
         """Get the value of a single input requirement based its type and content, if it is matched in list of user input items"""
         value = None

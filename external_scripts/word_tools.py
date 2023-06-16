@@ -199,65 +199,81 @@ def words_to_number(num_words:str) -> int|float:
         return int(words_to_int_str(num_words))
 
 #------------------------
+# Time word functions
+
+
+
+#------------------------
 # Sentence/message processing
 
 def get_words_only(message:str) -> list[str|int|float]:
-    """returns a list containing only the words within a message, and excludes any other characters (like punctuation)"""
+    """returns a list containing only the words, numbers, and times within a string message"""
 
     def remove_punctuation(word:str) -> str:
         """remove all non-alpha-numeric characters from the beginning and end of a word"""
         while True:
-            if word:                            # break if word is empty! (will happen if a word has no alpha numeric chars)
+            if word:                                # break if word is empty! (will happen if a word has no alpha numeric chars)
                 if not word[0].isalnum():
-                    word = word[1:]             # remove first character and restart loop
+                    word = word[1:]                 # remove first character and restart loop
                     continue
                 elif not word[-1].isalnum():
-                    word = word[:-1]            # remove last character and restart loop
+                    word = word[:-1]                # remove last character and restart loop
                     continue
             break
         return word
 
+    def convert_number_words(message_words:list) -> list:
+        words_only = []                             # holds the words and numbers (converted from words) without punctuation
+        current_number_words = []                   # temporary number words to be processed into numbers
+
+        def convert_current_num_words():
+            # if current_number_words has any items, then convert them into a number, and add them to words_only
+            if current_number_words:
+                words_only.append(words_to_number(' '.join(current_number_words)))
+                current_number_words.clear()        # reset current_number_words to keep this as a single seperate number
+
+        def is_next_word_num(index:int) -> bool:
+            """determine if the next item in message_words is a number word"""
+            try:
+                return message_words[i+1] in NUMBER_WORDS
+            except:
+                return False
+
+        # ---main loop---
+        for i, word in enumerate(message_words):
+            # if the word is 'and' and it's in between 2 number words, with the previous word being anything higher than a tens, then treat it as part of the current number
+            if word == 'and' and ((current_number_words and (NUMBER_WORD_MAP.get(current_number_words[-1]) >= 100)) and is_next_word_num(i)):
+                pass                                # no need to add anything!
+            # if the word is not any sort of number word, append it to words_only
+            elif not word in NUMBER_WORDS:
+                convert_current_num_words()         # first check if there's number words to convert 
+                words_only.append(word)
+            # if the word IS a number word
+            else:
+                # if the word is a number word (but not 'oh', 'point'), add it to current_number_words
+                if word not in ('oh', 'point'):
+                    current_number_words.append(word)
+                # if the word is 'point' and it's in between 2 number words, then treat it as part of the current number (will become a decimal)
+                elif word == 'point' and (current_number_words and is_next_word_num(i)):
+                    current_number_words.append(word)
+                # if there is "oh" next to any number word, then treat it as part of the current number as a zero
+                elif word == 'oh' and (current_number_words or is_next_word_num(i)):
+                    current_number_words.append('zero')               
+
+        convert_current_num_words()                 # check if there's still number words to convert 
+
+        return words_only
+    
+    def convert_time_words(message_words_nums:list) -> list:
+        words_only = []                             # holds the words and numbers and times (converted from words) without punctuation
+        current_time_words = []                     # temporary time words to be processed into time objects
+
+        for i, word in enumerate(message_words_nums):
+            pass
+
+
+    # ---main function script---
     message_split = [remove_punctuation(w).lower() for w in message.split()]    # remove the punctuation and make all letter characters lowercase
-
-    words_only = []                             # holds the words and converterted number words without punctuation
-    current_number_words = []                   # temporary number words to be processed into numbers
-
-    def convert_cur_num_words():
-        # if current_number_words has any items, then convert them into a number, and add them to words_only
-        if current_number_words:
-            words_only.append(words_to_number(' '.join(current_number_words)))
-            current_number_words.clear()        # reset current_number_words to keep this as a single seperate number
-
-    def is_next_word_num(index:int) -> bool:
-        """determine if the next item in message_split is a number word"""
-        try:
-            return message_split[i+1] in NUMBER_WORDS
-        except:
-            return False
-        
-    #------
-    # main loop
-
-    for i, word in enumerate(message_split):
-        # if the word is 'and' and it's in between 2 number words, with the previous word being anything higher than a tens, then treat it as part of the current number
-        if word == 'and' and ((current_number_words and (NUMBER_WORD_MAP.get(current_number_words[-1]) >= 100)) and is_next_word_num(i)):
-            pass                                # no need to add anything!
-        # if the word is not any sort of number word, append it to words_only
-        elif not word in NUMBER_WORDS:
-            convert_cur_num_words()             # first check if there's number words to convert 
-            words_only.append(word)
-        # if the word IS a number word
-        else:
-            # if the word is a number word (but not 'oh', 'point'), add it to current_number_words
-            if word not in ('oh', 'point'):
-                current_number_words.append(word)
-            # if the word is 'point' and it's in between 2 number words, then treat it as part of the current number (will become a decimal)
-            elif word == 'point' and (current_number_words and is_next_word_num(i)):
-                current_number_words.append(word)
-            # if there is "oh" next to any number word, then treat it as part of the current number as a zero
-            elif word == 'oh' and (current_number_words or is_next_word_num(i)):
-                current_number_words.append('zero')               
-
-    convert_cur_num_words()                     # check if there's still number words to convert 
-
-    return words_only
+    words_nums = convert_number_words(message_split)        # convert all number words into numbers (ints/floats)
+    words_nums_times = convert_time_words(words_nums)       # convert all time-related words/numbers into times ()
+    return words_nums_times
