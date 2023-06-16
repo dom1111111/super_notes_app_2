@@ -1,7 +1,9 @@
-#------------------------
-# Data
 
-KEYWORDS = {                # even single word combos MUST be tuples - don't foget the comma
+
+#------------------------
+# Word constants
+
+KEYWORD_MAP = {                 # even single word combos MUST be tuples - don't foget the comma
     'wake_words': ('computer', ),
     'get':      ('get', 'return', 'retrieve', 'show', 'display', 'read'),
     'what':     ('what', "what's", 'what is'),
@@ -60,7 +62,42 @@ NUMBER_WORD_MAP = {
     'trillion':  1000000000000,
 }
 
-NUMBER_WORDS = tuple(NUMBER_WORD_MAP) + ('oh', 'point')
+ORDINAL_NUMBER_WORD_MAP = {
+    'first':        1,
+    'second':       2,
+    'third':        3,
+    'fourth':       4,
+    'fifth':        5,
+    'sixth':        6,
+    'seventh':      7,
+    'eighth':       8,
+    'nineth':       9,
+    'tenth':        10,
+    'eleventh':     11,
+    'twelfth':      12,
+    'thirteenth':   13,
+    'fourteenth':   14,
+    'fifteenth':    15,
+    'sixteenth':    16,
+    'seventeenth':  17,
+    'eighteenth':   18,
+    'nineteenth':   19, 
+    # tens:
+    'twentieth':    20,
+    'thirtieth':    30,
+    'fortieth':     40,
+    'fiftieth':     50,
+    'sixtieth':     60,
+    'seventieth':   70,
+    'eightieth':    80,
+    'ninetieth':    90,
+    # grand
+    'hundredth':    100,
+    'thousandth':   1000,
+    'millionth':    1000000,
+    'billionth':    1000000000,
+    'trillionth':   1000000000000,
+}
 
 MATH_OPERATOR_WORD_MAP = {
     'plus':     '+',
@@ -69,8 +106,19 @@ MATH_OPERATOR_WORD_MAP = {
     'divided':  '/'
 }
 
-_time_words = ('year', 'month', 'week', 'day', 'hour', 'minute', 'second')
-TIME_WORDS = _time_words + tuple(w + 's' for w in _time_words)
+#---
+
+NUMBER_WORDS = tuple(NUMBER_WORD_MAP) + ('oh', 'point')
+
+ORDINAL_NUMBER_WORDS = tuple(ORDINAL_NUMBER_WORD_MAP)
+
+_time_unit_words = ('year', 'month', 'week', 'day', 'hour', 'minute', 'second')
+_week_words = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')
+_month_words = ('january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december')
+_clock_words = ("o'clock", 'am', 'pm')
+TIME_WORDS = _time_unit_words + tuple(w + 's' for w in _time_unit_words) + _week_words + _month_words + _clock_words
+
+#TIME_WORDS_NUMBERS = TIME_WORDS + NUMBER_WORDS + ORDINAL_NUMBER_WORDS
 
 #------------------------
 # Word functions
@@ -79,9 +127,9 @@ def get_keywords_str(*keys:str, all:bool=False):
     keywords = ''
     if all:
         # brings all command keywords into a list, removes duplicates, and joins them into a single string
-        return ' '.join(list(dict.fromkeys([word for word_tup in KEYWORDS.values() for word in word_tup])))
+        return ' '.join(list(dict.fromkeys([word for word_tup in KEYWORD_MAP.values() for word in word_tup])))
     for key in keys:
-        for word in KEYWORDS.get(key):
+        for word in KEYWORD_MAP.get(key):
             keywords += word + ' '
         #keywords += ' '
     return keywords
@@ -91,7 +139,7 @@ def match_keywords(keyword_keys:tuple, text:str):
     assert isinstance(keyword_keys, tuple)
     match_count = 0
     for key in keyword_keys:
-        keywords = KEYWORDS.get(key)
+        keywords = KEYWORD_MAP.get(key)
         for word in keywords:
             if word in text.lower():
                 match_count += 1
@@ -138,7 +186,7 @@ def words_to_number(num_words:str) -> int|float:
             
         return overall_num
 
-    #------
+    #---
     
     if 'point' in num_words:
         overall_num = ''
@@ -185,7 +233,7 @@ def get_words_only(message:str) -> list[str|int|float]:
         try:
             return message_split[i+1] in NUMBER_WORDS
         except:
-            return
+            return False
         
     #------
     # main loop

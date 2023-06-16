@@ -186,12 +186,41 @@ class Command:
     
     def __init__(self, name:str, input:tuple, func:Callable|str, args:tuple=(), output:str=''):
         self.name = name
-        self.input = self._get_input_reqs_data(input)
+        self.input = tuple(self._get_req_data(r) for r in input)
         self.func = func
         self.args = args
         self.output = output
 
         self.keyword_input_vocab, self.all_input_vocab = self._get_input_req_words(input)
+
+    #------
+    #  methods for getting/converting input-requirement data
+
+    @staticmethod
+    def _get_req_data(req:str|tuple|list) -> tuple:
+        """convert an input requirement to a three-item-tuple (type, content, value)"""
+        
+        def process_multi_req(req:list):
+            val = None
+            for i, sub_r in enumerate(req):                             # check through the multi-item requirement,
+                if isinstance(sub_r, set):                              # and if it contains a set,
+                    val = req.pop(i)[0]                                 # remove the set and isolate the value within it (with [0] index)
+                    break                                               # break for loop once set is found (there should only ever be one set! any other's will be ignored)
+            # further convert any nested requirements, then return these as overall content
+            cont = tuple(Command._get_req_data(sub_r) for sub_r in req if not isinstance(sub_r, set))
+            return cont, val
+        
+        # determine the requirement type by its value or data-type
+        if req == 'NUMBER' or req == 'TIME' or req == 'OPEN':           # single string, special value type
+            return (req, None, None)
+        elif isinstance(req, tuple):                                    # tuples represent ANY type
+            cont, val = process_multi_req(list(req))
+            return ('ANY', cont, val)
+        elif isinstance(req, list):                                     # lists represent ALL type
+            cont, val = process_multi_req(req)
+            return ('ALL', cont, val)
+        else:                                                           # single string type
+            return ('STR', cont, val)
 
     @staticmethod
     def _get_input_req_words(input_reqs:tuple) -> str:
@@ -219,53 +248,27 @@ class Command:
                 keywords.extend(words)
 
         # remove duplicate words (by turning into set), and join into single string
-        return ' '.join(set(keywords)), ' '.join(set(words))   
+        return ' '.join(set(keywords)), ' '.join(set(words))
+
+    #------
+    # methods for checking user input against input requirements
 
     @staticmethod
-    def _get_input_reqs_data(input_reqs:tuple) -> tuple:
-        """return a tuple of three-item-tuples (type, content, value) for each input requirement"""
-        
-        def get_req_data(req:str|tuple|list) -> tuple:
-            # if the req is itterable, check if contains a *single item set*
-            # if it does, this should be the value - and also must remove the item from the itterable
-            try:
-                val = [i for i in req if isinstance(i, set) and len(i)==1]  # create list made up of only one-item sets
-                i = req.index(val[0])                                       # get index of the set
-                cont = req[:i] + req[i+1:]                                  # remove the set from the itterable req
-                val = val[0].pop()                                          # isolate the value within the set
-            except:
-                cont = req
-                val = None
-            # determine the requirement type by its value or data-type
-            if req == 'NUMBER' or req == 'TIME' or req == 'OPEN':           # single string, special value type
-                return (req, None, None)
-            elif isinstance(req, tuple):                                    # tuples represent ANY type
-                cont = tuple(get_req_data(sub_req) for sub_req in req)      # further convert any nested requirements
-                return ('ANY', cont, val)
-            elif isinstance(req, list):                                     # lists represent ALL type
-                cont = tuple(get_req_data(sub_req) for sub_req in req)      # further convert any nested requirements
-                return ('ALL', cont, val)
-            else:                                                           # single string type
-                return ('STR', cont, val)
-        
-        return tuple(get_req_data(r) for r in input_reqs) 
-
-    @staticmethod
-    def _get_input_req_value(req_type:str, req_content:str|tuple|list, user_input:list[str|int|float]):
-        """Get the initial value of a single input requirement based its type and content, and on a list of user input items"""
+    def _get_input_req_value(req_type:str, req_content:str|tuple|list, u_in_items:list[str|int|float]):
+        """Get the value of a single input requirement based its type and content, if it is matched in list of user input items"""
         value = None
 
         def get_sub_values(r_content:tuple) -> tuple:
             # sub_req[0] and sub_req[1] is type and content respectively
-            return tuple(Command._get_input_req_value(sub_req[0], sub_req[1], user_input) for sub_req in r_content)
+            return tuple(Command._get_input_req_value(sub_req[0], sub_req[1], u_in_items) for sub_req in r_content)
 
         if req_type == 'STR':
-            value = req_content if req_content in user_input else None
+            value = req_content if req_content in u_in_items else None
         elif req_type == 'NUMBER':
-            nums = tuple(x for x in user_input if (isinstance(x, int) or isinstance(x, float)))
+            nums = tuple(x for x in u_in_items if (isinstance(x, int) or isinstance(x, float)))
             value = nums[0] if nums else None       # only return the first instance of a number
         elif req_type == 'TIME':
-            times = tuple(x for x in user_input if isinstance(x, ,,,))
+            times = tuple(x for x in u_in_items if isinstance(x, ,,,))
             value = times[0] if times else None     # only return the first instance of a time
         elif req_type == 'OPEN':
             value = 'OPEN'                          # this will be processed outside of this method, so just have 'OPEN' as value
@@ -278,53 +281,41 @@ class Command:
 
         return value
 
-    #------
-
     def get_keyword_req_value(self, user_input:str) -> tuple:
         """returns a tuple of values for command's keyword input requirement, based on user input"""
-        usr_ipt_items = word_tools.get_words_only(user_input)                   # get a list with all words or numbers in user input
-        return self._get_input_req_value(self.input[0], usr_ipt_items)          # keyword req is first item 
+        usr_ipt_items = word_tools.get_words_only(user_input)               # get a list with all words or numbers in user input
+        return self._get_input_req_value(self.input[0], usr_ipt_items)      # keyword req is first item (input[0])
 
     def get_all_req_values(self, user_input:str) -> list:
         """returns a tuple of values for all command's input requirements, based on user input"""
-        usr_ipt_items = word_tools.get_words_only(user_input)                   # get a list with all words or numbers in user input
+        u_in_items = word_tools.get_words_only(user_input)                  # get a list with all words, numbers, times in user input
         req_values = []
 
         for req in self.input:
-            value = self._get_input_req_value(req[0], req[1], usr_ipt_items)
+            value = self._get_input_req_value(req[0], req[1], u_in_items)   # get value of req based on user input items
             # sub_req[0] and sub_req[1] is type and content respectively
-            if value:
-                if req[0] in ('STR', 'NUMBER', 'TIME', 'OPEN', 'ANY'):
-                    usr_ipt_items.remove(value)
-                elif req[0] == 'ALL':
-                    for sub_val in value:
-                        usr_ipt_items.remove(sub_val)
-                
-                # ADD THIS: value = r_value if r_value and value else value
-                """
-                for i, req in enumerate(self.input):
-                    # if an value was specified in input, then override it
-                    if req[2]:
-                        req_values[i] = req[2]
-                """
-            req_values.append(value)
+            if value:                                                       # if a value is returned (a user input item which met the requirement),
+                if req[0] in ('STR', 'NUMBER', 'TIME', 'ANY'):              # and it's any type except 'ALL' or 'OPEN', then remove the matched item from u_in_items
+                    u_in_items.remove(value)
+                elif req[0] == 'ALL':                                       # otherwise if type is `ALL` (several items must've been matched), 
+                    for sub_val in value:                                   # then remove each item from u_in_items
+                        u_in_items.remove(sub_val)
 
-        # IF THERE'S AN OPEN REQ, THEN ISOLATE ALL THE OTHER FOUND REQS FROM STRING, AND WHATEVER'S LEFT, WILL BE THE OPEN VALUE!
-        # ONLY DO IF ALL OTHER REQS ARE MET
-        if 'OPEN' in req_values:
+                value = req[2] if req[2] else value                         # if a value (req[2]) was manually set in the requirement, then use that value instead
+
+            req_values.append(value)                                        # add value to req_values (regardless if it was a match or not)
+
+        # if there is 'OPEN' in req_values (an OPEN requirement) and all other values are True (all other reqs have been met),
+        # then join all of the remaining items in user input and set this as the value for the OPEN requirement, 
+        # excluding any conjunctions or uneeded words
+        if 'OPEN' in req_values and all(req_values):
             pass
-
+            # must keep order! -> need to only look at words happening 
 
         return req_values
 
-    # > have it so that each requirement is processed in order, and it REMOVES the input items which met the req
-    # (this makes it easy for the OPEN req parsing to work)
-
-    # > this returns all req values -> maybe add option to only do keywords - but don't do seperate function
-    # otherwise _get_input_req_value still needs to be outside -> in which case it needs to ALWAYS return the matched words as values, 
-    # and keep any other overidden value as an entire seperate thing.
-    # then, this would use a while loop, rather than list comprehension or for loop, and the input list will be modified as it goes
-
+    #------
+    # command action methods
 
     def generate_command_action(self, input_req_values:tuple):
         """generates and returns a command action from the provided input-requirement-values"""
