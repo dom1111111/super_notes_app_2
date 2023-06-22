@@ -284,23 +284,23 @@ class Command:
 
     def get_keyword_req_value(self, user_input:str) -> tuple:
         """returns a tuple of values for command's keyword input requirement, based on user input"""
-        usr_ipt_items = word_tools.get_words_only(user_input)               # get a list with all words or numbers in user input
-        return self._get_input_req_value(self.input[0], usr_ipt_items)      # keyword req is first item (input[0])
+        user_input_items = word_tools.get_words_only(user_input)            # get a list with all words or numbers in user input
+        return self._get_input_req_value(self.input[0], user_input_items)   # keyword req is first item (input[0])
 
     def get_all_req_values(self, user_input:str) -> list:
         """returns a tuple of values for all command's input requirements, based on user input"""
-        u_in_items = word_tools.get_words_only(user_input)                  # get a list with all words, numbers, times in user input
+        user_input_items = word_tools.get_words_only(user_input)            # get a list with all words, numbers, times in user input
         req_values = []
 
         for req in self.input:
-            value = self._get_input_req_value(req[0], req[1], u_in_items)   # get value of req based on user input items
-            # sub_req[0] and sub_req[1] is type and content respectively
+            value = self._get_input_req_value(req[0], req[1], user_input_items) # get value of req based on user input items
+            # `sub_req[0]` and `sub_req[1]` is type and content respectively
             if value:                                                       # if a value is returned (a user input item which met the requirement),
-                if req[0] in ('STR', 'NUMBER', 'TIME', 'ANY'):              # and it's any type except 'ALL' or 'OPEN', then remove the matched item from u_in_items
-                    u_in_items.remove(value)
+                if req[0] in ('STR', 'NUMBER', 'TIME', 'ANY'):              # and it's any type except 'ALL' or 'OPEN', then remove the matched item from user_input_items
+                    user_input_items.remove(value)
                 elif req[0] == 'ALL':                                       # otherwise if type is `ALL` (several items must've been matched), 
-                    for sub_val in value:                                   # then remove each item from u_in_items
-                        u_in_items.remove(sub_val)
+                    for sub_val in value:                                   # then remove each item from user_input_items
+                        user_input_items.remove(sub_val)
 
                 value = req[2] if req[2] else value                         # if a value (req[2]) was manually set in the requirement, then use that value instead
 

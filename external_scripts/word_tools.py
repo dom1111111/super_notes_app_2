@@ -1,7 +1,7 @@
-
+from datetime import datetime, timedelta
 
 #------------------------
-# Word constants
+# Word maps
 
 KEYWORD_MAP = {                 # even single word combos MUST be tuples - don't foget the comma
     'wake_words': ('computer', ),
@@ -107,16 +107,19 @@ MATH_OPERATOR_WORD_MAP = {
 }
 
 #---
+# word tuples
 
 NUMBER_WORDS = tuple(NUMBER_WORD_MAP) + ('oh', 'point')
 
 ORDINAL_NUMBER_WORDS = tuple(ORDINAL_NUMBER_WORD_MAP)
 
-_time_unit_words = ('year', 'month', 'week', 'day', 'hour', 'minute', 'second')
-_week_words = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')
-_month_words = ('january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december')
-_clock_words = ("o'clock", 'am', 'pm')
-TIME_WORDS = _time_unit_words + tuple(w + 's' for w in _time_unit_words) + _week_words + _month_words + _clock_words
+WEEK_WORDS = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')
+MONTH_WORDS = ('january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december')
+_MISC_TIME_WORDS = ('am', 'pm', "o'clock", 'midnight', 'hours')     # 'hours' is needed for recognizing 24 hour time speach
+TIME_WORDS = WEEK_WORDS + MONTH_WORDS + _MISC_TIME_WORDS
+
+DURATION_WORDS = ('year', 'month', 'week', 'day', 'hour', 'minute', 'second')
+DURATION_WORDS += tuple(w + 's' for w in DURATION_WORDS)
 
 #TIME_WORDS_NUMBERS = TIME_WORDS + NUMBER_WORDS + ORDINAL_NUMBER_WORDS
 
@@ -187,7 +190,6 @@ def words_to_number(num_words:str) -> int|float:
         return overall_num
 
     #---
-    
     if 'point' in num_words:
         overall_num = ''
         nums = num_words.split('point')
@@ -201,7 +203,67 @@ def words_to_number(num_words:str) -> int|float:
 #------------------------
 # Time word functions
 
+def words_numbers_to_duration(words_nums:list) -> timedelta:
+    
+    time_unit_sec_val = {
+        'second':   1,
+        'minute':   60,
+        'hour':     3600,
+        'day':      86400,
+        'week':     604800,
+        'month':    x,
+        'year:':    31536000
+    }
 
+    # TESTING
+    def time_addition_with_delta():
+        now = datetime.now().astimezone()
+        td = timedelta(weeks=4)
+
+        added_t = now + td
+
+        print(now)
+        print(td)
+        print(added_t)
+
+    def time_addition_with_dt_only():
+        now = datetime.now().astimezone()
+        added_now = now.replace(month=now.month+1)
+
+        print(now)
+        print(added_now)
+
+    time_addition_with_delta()
+    print('\n')
+    time_addition_with_dt_only()
+
+    # operations:
+
+    # 
+        #print(datetime())
+
+        # you can just make a function which returns datetime objects, all in a standard string
+        # it has all of the same args as datetime.datetime, but with default values which use the current time
+        # if no arguments are passed, it just returns the current time
+        # >>> https://docs.python.org/3/library/datetime.html#datetime.datetime.replace - this basically does this
+
+
+def words_numbers_to_time(words_nums:list) -> datetime:
+
+    def get_frmt_code(word:str|int|float) -> str:
+        if word in WEEK_WORDS:
+            return '%A'
+        elif word in MONTH_WORDS:
+            return '%B'
+        elif word in ('am', 'pm'):
+            return '%p'
+    
+    # https://docs.python.org/3/library/time.html#time.strftime
+        # + strptime
+    # convert words in a specific string format code + a value (ex: %A, Wednesday)
+    # use the complete str frmt code to compare the current time against the provided one, and minus the future time from the current
+    # the resulting float value then returned from these can then be converted into a struct_time
+    
 
 #------------------------
 # Sentence/message processing
