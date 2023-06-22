@@ -454,7 +454,8 @@ class CommandActionRunner:
 class AppCore:
     def __init__(self, commands:list[Command]):
         self._active = False
-        self._commands = commands                       # stores all command objects
+        self._commands = commands 
+        self._prep_commands()
 
         self._UI = TextAudioUI()
         self._vox_proc = VoiceInputCommandProcessor(self._UI, self._commands, 'computer')
@@ -468,8 +469,22 @@ class AppCore:
         self._UI.stop()
         #self._UI.end_GUI()
 
+    #---
+    # method to prepare commands as needed
+
+    def _prep_commands(self):
+        """changes any refference strings in command funcs to the methods they represent"""
+        str_func_map = {
+            'SHUTDOWN': self._shutdown,
+        }
+
+        for command in self._commands:
+            # if the command's function is a string, then match it to a corresponding internal method
+            if isinstance(command.func, str):
+                command.func = str_func_map.get(command.func)
+
     #---------
-    # main loop methods
+    # main loop helper methods
 
     def _get_input(self):
         """wait for input, then return it"""
@@ -498,52 +513,43 @@ class AppCore:
     def _generate_command_action(self, command:Command, input_req_values:tuple):
         """generates and returns a command action from the provided input-requirement-values"""
         
+        def convert_arg_ref_to_val(x):
+            """convert any string representing an index of one of the input requirement values into the value itself.
+            should always look like: '[#]', where '#' is the index number"""
+            try:
+                assert x.startswith('[') and x.endswith(']')        # make sure that the string starts and ends with sqaure brackets
+                return input_req_values[int(x[1:-1])]               # get to the string inbetween the sqaure brackets and convert it to an integer, then use that to index input_req_values for the corresponding value           
+            except:
+                return x
 
-        
-        """
-        str_func_map = {
-            'SHUTDOWN': function,
-        }
-        f = str_func_map.get(func)
-        """
-
-        # if this command's function is actually just a string, then just return that
-        # (it is meant to be used to access an otherwise unreachable method in AppCore)
-        if isinstance(command.func, str):
-            return command.func
-        
-        else:
-            if command.args and 
-
-        # check if args at all in first place
-        # then account for [FUNC] and [#] in args and or output
-        
-
+        def convert_mes_ref_to_val(mes:str, func_result) -> str:
+            """convert any reffernces in the output string into the actual req values"""
+            mes = mes.replace('[FUNC]', str(func_result))           # first convert any function result reffernces ('[FUNC]') to the actual function result
+            while True:                                             # then convert any input_req_value refferences ('[n]') into actual values
+                try:
+                    ia = mes.index('[')                             # find index of first left sqaure bracket
+                    ib = mes.index(']')                             # find index of first right sqaure bracket
+                    mes = mes.replace(mes[ia:ib+1], input_req_values[int(mes[ia+1:ib])])
+                    # ^ replace the index refference substring (both sqaure brackets and everything inbetween),
+                    # with the corresponding value at the input_req_values index (the number in between the sqaure brackets)
+                except:
+                    break
+            return mes
+            
+        # generate the action function
         def action():
-            result = command.func()
+            result = command.func(*(convert_arg_ref_to_val(arg) for arg in command.args)) if command.args else command.func()
+            if command.output:
+                self._UI.nl_print(convert_mes_ref_to_val(command.output, result))
 
         return action
-
-        #result = command.func()
-        #speak(message_pt1, result, message_pt2)
-
-        """
-        def _generate_action(self, func:Callable|str, args:tuple, output:str):
-            # set function
-            f = func
-            
-            ###
-            def _generate_command_action(self, command):
-                # add this to command runner:
-                pass
-                #result = command.func()
-                return (message_pt1, result, message_pt2)
-            ###
-        """
     
-    def _do_command_action(self, action):
-        pass
-    # [3] if get an action back from command, run the command action (in seperate thread)
+    def _do_command_action(self, action:Callable):
+        """run the command action in a new thread"""
+        Thread(target=action, daemon=True).start()
+
+    #---------
+    # main loop
 
     def _main_loop(self):
         while self._active:
