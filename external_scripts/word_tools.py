@@ -337,5 +337,5 @@ def get_words_only(message:str) -> list[str|int|float]:
     # ---main function script---
     message_split = [remove_punctuation(w).lower() for w in message.split()]    # remove the punctuation and make all letter characters lowercase
     words_nums = convert_number_words(message_split)        # convert all number words into numbers (ints/floats)
-    words_nums_times = convert_time_words(words_nums)       # convert all time-related words/numbers into times ()
-    return words_nums_times
+    #words_nums_times = convert_time_words(words_nums)       # convert all time-related words/numbers into times ()
+    return words_nums #words_nums_times

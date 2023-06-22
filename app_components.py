@@ -180,7 +180,7 @@ class Command:
 
     ### `output`: str
         A message to be returned after the func is called.
-        If 'FUNC' is within the string, then it will be replaced with the return value of func attribute.
+        If '[FUNC]' is within the string, then it will be replaced with the return value of func attribute.
         Like with args, if an input requirement index (ex: [1]) is within the string, then it will replaced with its value
     """
     
@@ -194,7 +194,7 @@ class Command:
         self.keyword_input_vocab, self.all_input_vocab = self._get_input_req_words(input)
 
     #------
-    #  methods for getting/converting input-requirement data
+    # methods for getting/converting input-requirement data
 
     @staticmethod
     def _get_req_data(req:str|tuple|list) -> tuple:
@@ -268,9 +268,9 @@ class Command:
         elif req_type == 'NUMBER':
             nums = tuple(x for x in u_in_items if (isinstance(x, int) or isinstance(x, float)))
             value = nums[0] if nums else None       # only return the first instance of a number
-        elif req_type == 'TIME':
-            times = tuple(x for x in u_in_items if isinstance(x, ,,,))
-            value = times[0] if times else None     # only return the first instance of a time
+        #elif req_type == 'TIME':
+        #    times = tuple(x for x in u_in_items if isinstance(x, ,,,))
+        #    value = times[0] if times else None     # only return the first instance of a time
         elif req_type == 'OPEN':
             value = 'OPEN'                          # this will be processed outside of this method, so just have 'OPEN' as value
         elif req_type == 'ANY':
@@ -314,39 +314,7 @@ class Command:
             # must keep order! -> need to only look at words happening 
 
         return req_values
-
-    #------
-    # command action methods
-
-    def generate_command_action(self, input_req_values:tuple):
-        """generates and returns a command action from the provided input-requirement-values"""
-        # add this to command runner:
-        pass
-        #result = command.func()
-        #speak(message_pt1, result, message_pt2)
-
-        """
-        def _generate_action(self, func:Callable|str, args:tuple, output:str):
-            # set function
-            f = func
-            if isinstance(func, str):
-                str_func_map = {
-                    'SHUTDOWN': function,
-                }
-                f = str_func_map.get(func)
-            # 
             
-            ###
-            def _generate_command_action(self, command):
-                # add this to command runner:
-                pass
-                #result = command.func()
-                return (message_pt1, result, message_pt2)
-            ###
-        """
-            
-        
-
 
 class CommandAction:
     def __init__(self):
@@ -356,11 +324,6 @@ class CommandAction:
 #-------------------------------
 # Core helper classes
 
-class CommandActionRunner:
-    def __init__(self, UI:TextAudioUI):
-        pass
-
-
 class VoiceInputCommandProcessor:
     def __init__(self, UI:TextAudioUI, commands:list[Command], wakewords:str):
         self._UI = UI
@@ -368,7 +331,8 @@ class VoiceInputCommandProcessor:
         self._wake_timer = time_tools.Timer(5, self._wake_timeout)      # keeps track of wakfulness in real time
         
         self._wakewords = wakewords
-        self._all_command_keywords = self._generate_command_keywords(commands)  # all command keywords - used for transcriber vocabulary
+        self.commands = commands
+        self._all_command_keywords = self._generate_command_keywords()  # all command keywords - used for transcriber vocabulary
         
         self._current_input = []                                        # all of the current input for a single cycle
         self._current_command = None                                    # the name of command whose keywords have been matched
@@ -384,7 +348,7 @@ class VoiceInputCommandProcessor:
             }
         )
 
-    def reset_command_input(self):
+    def _reset_command_input(self):
         """resets current input cycle"""
         self._current_input.clear()
         self._current_command = None
@@ -397,20 +361,20 @@ class VoiceInputCommandProcessor:
         # vvv should eventually be a visual colour indication of wakefullness -> something lights up when awake, and stops when timer runs out
         self._UI.nl_print('\n\n---waking!---')
     
-    def wake_stop(self):
+    def _wake_stop(self):
         self._wake_timer.stop()
         # AGAIN, replace with visual colour change or something
 
     def _wake_timeout(self):
-        self.reset_command_input()
+        self._reset_command_input()
         # AGAIN, replace with visual colour change or something
         self._UI.nl_print('wake timer ran out!')
 
-    def validiate_input(self, input_audio:bytes, wakewords:str) -> bool:
+    def validiate_input(self, input_audio:bytes) -> bool:
         """Check if input audio contains wakeword(s) or is within wake timeout.
         Wakewords must be a single word or multiple seperated by whitespace"""
-        if self._transcriber.transcribe(input_audio, wakewords):
-            self.reset_command_input()
+        if self._transcriber.transcribe(input_audio, self._wakewords):
+            self._reset_command_input()
             self._wake_start()
         elif self._wake_timer.is_active():
             pass
@@ -421,13 +385,12 @@ class VoiceInputCommandProcessor:
     #---------
     # methods for input transcription
 
-    @staticmethod
-    def _generate_command_keywords(commands:list[Command]) -> str:
+    def _generate_command_keywords(self) -> str:
         """generate `all_command_keywords` str from the combination of every command's input keyword vocabulary"""
         # combine each command's input_keyword_vocab set into a tuple with comprehension
         # create a new set of every item within those keyword sets by unpacking the tuple and passing it to set().union()
         # and then join that set into a single string of words
-        return ' '.join(set().union(*(command.keyword_input_vocab for command in commands)))
+        return ' '.join(set().union(*(command.keyword_input_vocab for command in self.commands)))
 
     def _transcribe_current_input_audio(self):
         """transcribe each phrase in current_input depending on stage in input cycle
@@ -440,7 +403,7 @@ class VoiceInputCommandProcessor:
                 phrase['text1'] = text if text else '_'
             # but if a command has been found, then transcribe it using the current_command's input requirements as vocabulary
             elif self._current_command and not phrase['text2']:
-                if 'OPEN' in current_command:
+                if 'OPEN' in (req[0] for req in self._current_command.input):   # this checks if current command contains any input requirements with the type ([0]) 'OPEN'
                     text = self._transcriber.transcribe(phrase['audio'])
                 else:
                     text = self._transcriber.transcribe(phrase['audio'], self._current_command.all_input_vocab)
@@ -457,22 +420,31 @@ class VoiceInputCommandProcessor:
                 text += phrase[t_key] + ', '
         return text
     
-    def add_input_audio_get_action(self, input_audio:bytes, commands:list[Command]):
-        self._add_to_current_input(input_audio)
+    def check_input_get_command_and_values(self, input_audio:bytes) -> tuple[Command, tuple]:
+        """Pass in audio input and check if it (and previously passed in input within the same wake timeout) 
+        matches all of the command's input requirements. If it does, will return a command and its input requirement values.
+        """
+        self._add_to_current_input(input_audio)     # add input to current audio
         while True:
-            self._transcribe_current_input_audio()
-            if not self._current_command:
-                for command in commands:
+            self._transcribe_current_input_audio()  # trasncribe ALL current audio (either with just keywords, or with current_command vocab)
+            if not self._current_command:           # first check if current_input text matches a command's keyword input requirements
+                for command in self.commands:
                     if command.get_keyword_req_value(self.get_current_input_text(), command):
-                        self._current_command = command
-                        continue
-            else:
+                        self._current_command = command     # set current_command to the command whose keyword requirement was matched
+                        continue                            # and then restart the loop
+            else:                                   # if a command was matched, check if current_input matches all of the current command's input requirements
                 input_req_values = self._current_command.get_all_req_values(self.get_current_input_text())
-                if all(input_req_values):
-                    # if all input requirements are met, generate an action and return it
-                    action = self._current_command.generate_command_action(input_req_values)
-                    return action
+                if all(input_req_values):                           # if all input requirements are met
+                    self._wake_stop()                               # turn off wake timer, so no new audio phrase input can be accepted again without using the wakeword
+                    self._reset_command_input()                     # reset input cycle values
+                    return self._current_command, input_req_values  # and then return Command and the values
             break
+        return None, None       # if any of the checks above fail, then return two `None`s
+
+
+class CommandActionRunner:
+    def __init__(self, UI:TextAudioUI):
+        pass
 
 
 #-------------------------------
@@ -501,28 +473,73 @@ class AppCore:
 
     def _get_input(self):
         """wait for input, then return it"""
-        return self._UI.get_voice_audio()               # this is blocking
+        return self._UI.get_voice_audio()                       # this is blocking
 
-    def _get_command_from_input(self, user_input):
-        if isinstance(user_input, str):
-            # print out input
-            for command in self._commands:
-                action = get_command_action_from_input(user_input, command)
-                if action:
-                    break
-        elif isinstance(user_input, bytes):
-            valid = self._vox_proc.validiate_input()
-            if valid:
-                action = self._vox_proc.add_input_audio_get_action(user_input, self._commands)
-                # print out input
-                if action:
-                    self._vox_proc.wake_stop()                 # turn off wake timer, so no new audio phrase input can be accepted again
-                    self._vox_proc.reset_command_input()       # reset input cycle values
-        # elif is audio bytes BUT got through button-press-audio-input instead of phrase_detector:
-            # do same as above, but don't validate
+#NOTE >>> THIS CURRENT WON'T WORK IF NUMBERS ARE TYPED, etc. - must be adjusted to handle pure text input, not voice transcription text
+    def _get_command_from_text_input(self, user_input:str) -> tuple[Command, tuple]:
+        """return a command and its input requirement values if user_input matches all of a command's input requirements"""
+        for command in self._commands:
+            input_req_values = command.get_all_req_values(user_input)
+            if all(input_req_values):
+                return command, input_req_values
+        return None, None
+        
+    def _get_command_from_audio_input(self, user_input:bytes) -> tuple[Command, tuple]:
+        """return a command and its input requirement values if user_input matches all of a command's input requirements"""
+        if self._vox_proc.validiate_input(user_input):          # first check if input is valid (contains wakeword, or is within current wake time)
+            return self._vox_proc.check_input_get_command_and_values(user_input)
+
+        # if audio bytes BUT got through button-press-audio-input instead of phrase_detector:
+            # no need to validate
+            # return self._vox_proc.check_input_get_command_and_values(user_input)
+
+        return None, None
+
+    def _generate_command_action(self, command:Command, input_req_values:tuple):
+        """generates and returns a command action from the provided input-requirement-values"""
+        
+
+        
+        """
+        str_func_map = {
+            'SHUTDOWN': function,
+        }
+        f = str_func_map.get(func)
+        """
+
+        # if this command's function is actually just a string, then just return that
+        # (it is meant to be used to access an otherwise unreachable method in AppCore)
+        if isinstance(command.func, str):
+            return command.func
+        
+        else:
+            if command.args and 
+
+        # check if args at all in first place
+        # then account for [FUNC] and [#] in args and or output
+        
+
+        def action():
+            result = command.func()
 
         return action
 
+        #result = command.func()
+        #speak(message_pt1, result, message_pt2)
+
+        """
+        def _generate_action(self, func:Callable|str, args:tuple, output:str):
+            # set function
+            f = func
+            
+            ###
+            def _generate_command_action(self, command):
+                # add this to command runner:
+                pass
+                #result = command.func()
+                return (message_pt1, result, message_pt2)
+            ###
+        """
     
     def _do_command_action(self, action):
         pass
@@ -530,11 +547,21 @@ class AppCore:
 
     def _main_loop(self):
         while self._active:
+            # (1) get input
             user_input = self._get_input()
-            com_action = self._get_command_from_input(user_input)
-            if com_action:
-                # self._UI.nl_print(f'now doing {com_action.name}')
-                self._do_command_action(com_action)
+            # (2) check for a matching command from input (and display input)
+            if isinstance(user_input, str):
+                command, input_req_values = self._get_command_from_text_input(user_input)
+                self._UI.nl_print(user_input)
+            elif isinstance(user_input, bytes):
+                command, input_req_values = self._get_command_from_audio_input(user_input)
+                self._UI.nl_print(self._vox_proc.get_current_input_text())
+            # (3) if command is matched, generate an action from the command input requirement values
+            if command:
+                action = self._generate_command_action(command, input_req_values)
+            # (4) execute command action
+                self._UI.nl_print(f'now executing "{command.name}" command action')
+                self._do_command_action(action)
 
     #---------
 
