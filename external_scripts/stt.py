@@ -34,7 +34,6 @@ class _WhisperT:
 class _VoskT:
     def __init__(self):
         self.tiny_model_path = path.join(path.dirname(__file__), "vosk_models/vosk-model-small-en-us-0.15")
-        self.small_model_path = path.join(path.dirname(__file__), "vosk_models/vosk-model-en-us-0.22-lgraph")
         SetLogLevel(-1)                     # disables kaldi output messages
 
         # load model and recognizer

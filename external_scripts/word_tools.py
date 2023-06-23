@@ -211,7 +211,7 @@ def words_numbers_to_duration(words_nums:list) -> timedelta:
         'hour':     3600,
         'day':      86400,
         'week':     604800,
-        'month':    x,
+        'month':    None,
         'year:':    31536000
     }
 

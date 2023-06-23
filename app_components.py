@@ -7,13 +7,12 @@ from threading import Lock, Thread, Event
 from queue import Queue
 from functools import wraps
 from typing import Callable
-from UI_scripts import stt, tts, play_rec_audio, GUI_tk
-from external_scripts import number_tools, time_tools, word_tools
+from external_scripts import stt, tts, play_rec_audio, GUI_tk, number_tools, time_tools, word_tools
 
 #-------------------------------
 # UI classes
 
-class SharedResourceWrapper:
+class _SharedResourceWrapper:
     def __init__(self):
         self.mutex = Lock()
 
@@ -31,11 +30,11 @@ class TextAudioUI:
     Includes all needed methods for voice and text input and output.
     All methods are thread safe.
     """
-    _vox_in_wrap = SharedResourceWrapper()
-    _vox_out_wrap = SharedResourceWrapper()
-    _audio_out_wrap = SharedResourceWrapper()
-    _terminal_wrap = SharedResourceWrapper()
-    _TUI_wrap = SharedResourceWrapper()
+    _vox_in_wrap = _SharedResourceWrapper()
+    _vox_out_wrap = _SharedResourceWrapper()
+    _audio_out_wrap = _SharedResourceWrapper()
+    _terminal_wrap = _SharedResourceWrapper()
+    _TUI_wrap = _SharedResourceWrapper()
 
     def __init__(self):
         self._vox_in = stt.PhraseDetector()
@@ -314,17 +313,12 @@ class Command:
             # must keep order! -> need to only look at words happening 
 
         return req_values
-            
-
-class CommandAction:
-    def __init__(self):
-        pass
 
 
 #-------------------------------
 # Core helper classes
 
-class VoiceInputCommandProcessor:
+class _VoiceInputCommandProcessor:
     def __init__(self, UI:TextAudioUI, commands:list[Command], wakewords:str):
         self._UI = UI
         self._transcriber = stt.Transcriber()
@@ -442,23 +436,21 @@ class VoiceInputCommandProcessor:
         return None, None       # if any of the checks above fail, then return two `None`s
 
 
-class CommandActionRunner:
-    def __init__(self, UI:TextAudioUI):
-        pass
-
-
 #-------------------------------
 # App Core class
 
 # aka Input-to-Command Executer
 class AppCore:
+    """
+    Instatiate this class, passing in a list of `Command` objects, and call the `run()` method to run the app
+    """
     def __init__(self, commands:list[Command]):
         self._active = False
         self._commands = commands 
         self._prep_commands()
 
         self._UI = TextAudioUI()
-        self._vox_proc = VoiceInputCommandProcessor(self._UI, self._commands, 'computer')
+        self._vox_proc = _VoiceInputCommandProcessor(self._UI, self._commands, 'computer')
 
     #---------
     # methods for internal command actions
