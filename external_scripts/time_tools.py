@@ -76,10 +76,9 @@ class Timer:
         self._t.clear()
         while self.is_active():
             self._t.wait(self._target - time())
-            if time() >= self._target:
+            if time() >= self._target and self.is_active():
                 self._func(*self._args)
-                self._t.set()
-                break
+                self.stop()
 
     def start(self):
         "start the timer"

@@ -8,7 +8,7 @@ commands = [
     Command(
         name=   'Shutdown',
         input=  (
-                    ['app', 'shutdown'],
+                    [('app', 'application', 'program'), 'shutdown'],
                 ),
         func=   'SHUTDOWN',
         output= 'shutting down'
