@@ -97,7 +97,8 @@ class TextAudioUI:
     @_terminal_wrap
     def nl_print(self, *message):
         """Same as default `print()` function but with an extra line break!"""
-        print('\n', *message)
+        print()
+        print(*message)
 
     #---------
     # text UI methods
@@ -408,32 +409,28 @@ class _VoiceInputCommandProcessor:
         """Pass in audio input and check if it (and previously passed in input within the same wake timeout) 
         matches all of the command's input requirements. If it does, will return a command and its input requirement values.
         """
-        print('checking for commands')
         self._add_to_current_input(input_audio)         # add input to current audio
-        self._transcribe_current_input_audio()          # trasncribe ALL current audio (either with just keywords, or with current_command vocab)
+        self._transcribe_current_input_audio()          # transcribe ALL current audio (either with just keywords, or with current_command vocab)
         input_text = self.get_current_input_text()
         
-        req_vals = None
+        com, req_vals = None, None
 
-        def check_all_reqs():
-            print('is now current command')
-            input_req_values = self._current_command.get_all_req_values(input_text)
+        def check_all_reqs(command:Command):
+            input_req_values = command.get_all_req_values(input_text)
             if all(input_req_values):
                 self._wake_stop()                       # turn off wake timer, so no new audio phrase input can be accepted again without using the wakeword + reset input cycle values
-                return input_req_values
+                return command, input_req_values
 
         if not self._current_command:                   # first check if current_input text matches a command's keyword input requirements
-            print('is not yet current command')
             for command in self.commands:
                 if command.get_keyword_req_value(input_text):
                     self._current_command = command     # set current_command to the command whose keyword requirement was matched
-                    req_vals = check_all_reqs()         # then check current_command's requirements
+                    com, req_vals = check_all_reqs(command)     # then check current_command's requirements
                     break
         else:                                           # if a command was matched, check if current_input matches all of the current command's input requirements
-            req_vals = check_all_reqs()
+            com, req_vals = check_all_reqs(self._current_command)
 
-        print('>>>>', self._current_command, req_vals)
-        return self._current_command, req_vals
+        return com, req_vals
 
 
 #-------------------------------
@@ -456,7 +453,6 @@ class AppCore:
     # methods for internal command actions
 
     def _shutdown(self):
-        self._UI.nl_print('shutting down...')
         self._active = False
         self._UI.stop()
         #self._UI.end_GUI()
@@ -544,18 +540,20 @@ class AppCore:
                 input_text = user_input
             elif isinstance(user_input, bytes):
                 command, input_req_values = self._get_command_from_audio_input(user_input)
-                print('command:', command)
-                print('inp_req_vals:', input_req_values)
                 input_text = self._vox_proc.get_current_input_text()
             if input_text:                              # print input text if there is some 
                 self._UI.nl_print(f'🗣  "{input_text}" --- req-values: "{input_req_values}"')
             # (3) if command is matched, generate an action from the command input requirement values
-            if input_req_values:
+            if command and input_req_values:
                 self._UI.nl_print('command found!')
                 action = self._generate_command_action(command, input_req_values)
             # (4) execute command action
                 self._UI.nl_print(f'now executing "{command.name}" command action')
-                self._do_command_action(action)
+                if command.name == "Shutdown":
+                    action()
+                # all command actions should be run with `do_command_action` EXCEPT the 'Shutdown' the command (which should NOT run in a new thread)
+                else:
+                    self._do_command_action(action)
 
     #---------
 

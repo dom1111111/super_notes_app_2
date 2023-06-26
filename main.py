@@ -11,7 +11,7 @@ commands = [
                     [('app', 'application', 'program'), 'shutdown'],
                 ),
         func=   'SHUTDOWN',
-        output= 'shutting down'
+        output= 'shutting down...'
     ),
     Command(
         name=   'Get Time',

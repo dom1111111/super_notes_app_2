@@ -104,7 +104,8 @@ class PlayAudio(_BaseAudio):
     # extends the parent class stop() method to also close the audio file
     def stop(self):
         super(PlayAudio, self).stop()
-        self.file.close()
+        if hasattr(self, 'file'):
+            self.file.close()
 
 class RecAudio(_BaseAudio):
     """
